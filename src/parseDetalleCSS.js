@@ -73,6 +73,7 @@ async function parseDetalleCSS(input) {
   const avisos = [];
   let cur = null;
   let seccion = 'encabezado';
+  let tipoDocumento = '';
 
   for (let r = 2; r <= ws.rowCount; r++) {
     const b = txt(r, 2);
@@ -80,7 +81,10 @@ async function parseDetalleCSS(input) {
     const c = txt(r, 3);
     const d = txt(r, 4);
 
-    if (nb === 'seguro social' && norm(c) === 'cedula') {
+    // Encabezado de cada empleado. La segunda columna dice "Cédula" o "Pasaporte"
+    // según el documento del empleado; se reconoce por "Apellido" en la columna D.
+    if (nb === 'seguro social' && norm(d) === 'apellido') {
+      tipoDocumento = norm(c);
       seccion = 'id';
       continue;
     }
@@ -88,6 +92,7 @@ async function parseDetalleCSS(input) {
       cur = {
         seguroSocial: b,
         cedula: c.toUpperCase(),
+        tipoDocumento,
         apellido: d,
         nombre: txt(r, 6),
         sexo: txt(r, 11),
