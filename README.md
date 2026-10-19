@@ -25,8 +25,11 @@ Los dos reportes se ven en pantalla y se pueden descargar en Excel.
 | SUELDO, VACACIONES, HORAS_EXTRAS, COMISIONES, BONIFICACIONES, SALARIO_ESPECIE, DIETA, PRIMA_PRODUCCION, DTM, GRATIFICACION_AGUINALDOS, GASTO_REPRESENTACION | El monto reportado del concepto con el mismo nombre |
 | IMPUESTO_RENTA | El concepto "Impuesto sobre la renta" |
 | TOTAL_DE_DEDUCCIONES, RENTA_NETA_GRAVABLE, A_FAVOR_DEL_FISCO, A_FAVOR_DEL_EMPLEADO | Las mismas fórmulas de la plantilla de la DGI |
-| Las deducciones y las retenciones | 0 (no vienen en el detalle de la CSS) |
+| RETENCIONES_SALARIO | Igual a IMPUESTO_RENTA (el ISR ya se retuvo en planilla) |
+| RETENCIONES_GR | Igual a IMP_RENTA_REPRESENTACION |
+| Las deducciones | 0 (no vienen en el detalle de la CSS) |
 
+- Como las retenciones son iguales al impuesto, A_FAVOR_DEL_FISCO y A_FAVOR_DEL_EMPLEADO siempre dan 0.
 - Los viáticos no van al Informe 03.
 - Las filas van ordenadas por cédula.
 - El sistema revisa que la suma de SALARIO y la de ISR sean iguales a los totales del detalle de la CSS.
