@@ -82,16 +82,23 @@ function construirPlanilla03({ anio, detalles, buscarEmpleado }) {
     const ppSS = sum('ppSS');
     const xiii = sum('xiii');
     const isr = sum('isr');
-    const base = salarios + ppSS;
+    // La CSS calcula y redondea cada cuota por empleado y luego suma; se hace igual
+    // para que el total cuadre al centavo con el detalle.
+    const cuota = (fn) => round2(filas.reduce((s, f) => {
+      const v = f.meses[i];
+      return v ? s + round2(fn(v.mes + v.ppSS, v)) : s;
+    }, 0));
     const r = {
       periodo: info.periodo, salarios, pp, ppSS, xiii, isr,
-      ssPatronal: round2(base * t.ssPatronal),
-      ssXiiiPatronal: round2(xiii * t.ssXiiiPatronal),
-      sePatronal: round2(salarios * t.sePatronal),
-      riesgo: round2(base * riesgo),
-      ssEmpleado: round2(base * t.ssEmpleado),
-      ssXiiiEmpleado: round2(xiii * t.ssXiiiEmpleado),
-      seEmpleado: round2(salarios * t.seEmpleado),
+      ssPatronal: cuota((b) => b * t.ssPatronal),
+      ssXiiiPatronal: cuota((b, v) => v.xiii * t.ssXiiiPatronal),
+      // Seguro educativo: la CSS redondea la tasa combinada (2.75%) por empleado;
+      // la parte patronal es lo que queda al restar la del empleado.
+      sePatronal: cuota((b, v) => round2(v.mes * (t.sePatronal + t.seEmpleado)) - round2(v.mes * t.seEmpleado)),
+      riesgo: cuota((b) => b * riesgo),
+      ssEmpleado: cuota((b) => b * t.ssEmpleado),
+      ssXiiiEmpleado: cuota((b, v) => v.xiii * t.ssXiiiEmpleado),
+      seEmpleado: cuota((b, v) => v.mes * t.seEmpleado),
       tasas: { ...t, riesgo },
     };
     r.subtotalPatronal = round2(r.ssPatronal + r.ssXiiiPatronal + r.sePatronal + r.riesgo);

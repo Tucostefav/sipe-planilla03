@@ -121,7 +121,10 @@ test('Planilla 03: columnas del mes, PP SS y acumulado anual', async () => {
   const ana = p.filas.find((f) => f.cedula === '4-50-60');
   assert.equal(ana.meses[7].mes, 800.29);
   const res = p.resumen[7];
-  assert.equal(res.ssPatronal, Math.round((p.filas.reduce((s, f) => s + f.meses[7].mes + f.meses[7].ppSS, 0)) * 0.1325 * 100) / 100);
+  // Como la CSS: cada cuota se redondea por empleado y después se suma.
+  const porEmpleado = (fn) => round2(p.filas.reduce((s, f) => s + (f.meses[7] ? round2(fn(f.meses[7])) : 0), 0));
+  assert.equal(res.ssPatronal, porEmpleado((v) => (v.mes + v.ppSS) * 0.1325));
+  assert.equal(round2(res.sePatronal + res.seEmpleado), porEmpleado((v) => v.mes * 0.0275));
   const buf = await excelPlanilla03({ empresa: ago.empresa, planilla: p });
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf);
