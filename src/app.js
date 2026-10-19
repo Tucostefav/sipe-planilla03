@@ -43,6 +43,7 @@ function crearApp({ store, auth }) {
     for (const e of empresas) {
       const ds = await svc.listarDetalles(e.ruc);
       e.ultimo = ds.length ? ds[0].periodo : null;
+      e.periodos = ds.map((d) => String(d.periodo));
     }
     res.send(V.inicio({ empresas, usuario: req.usuario, ...flash(req) }));
   }));

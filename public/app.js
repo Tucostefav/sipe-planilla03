@@ -1,0 +1,42 @@
+'use strict';
+
+// Zona para subir: muestra el archivo elegido y acepta arrastrar y soltar.
+document.querySelectorAll('[data-subir]').forEach((form) => {
+  const zona = form.querySelector('.zona');
+  const input = form.querySelector('input[type="file"]');
+  const nombre = form.querySelector('[data-nombre]');
+  const boton = form.querySelector('[data-procesar]');
+  const mostrar = () => {
+    const f = input.files && input.files[0];
+    if (!f) return;
+    nombre.textContent = f.name;
+    zona.classList.add('lista');
+  };
+  input.addEventListener('change', mostrar);
+  ['dragenter', 'dragover'].forEach((ev) => zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add('encima'); }));
+  ['dragleave', 'drop'].forEach((ev) => zona.addEventListener(ev, () => zona.classList.remove('encima')));
+  zona.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; mostrar(); }
+  });
+  form.addEventListener('submit', () => {
+    form.classList.add('procesando');
+    boton.textContent = 'Procesando…';
+  });
+});
+
+// Filtro instantáneo de filas por cédula o nombre.
+document.querySelectorAll('[data-filtro]').forEach((input) => {
+  const tabla = document.querySelector(input.dataset.filtro);
+  if (!tabla) return;
+  const filas = [...tabla.tBodies[0].rows];
+  const textos = filas.map((tr) => (tr.textContent + ' ' + [...tr.querySelectorAll('input')].map((i) => i.value).join(' ')).toUpperCase());
+  const aplicar = () => {
+    const q = input.value.trim().toUpperCase();
+    filas.forEach((tr, i) => { tr.hidden = !!q && !textos[i].includes(q); });
+  };
+  input.addEventListener('input', aplicar);
+  const form = input.closest('form');
+  if (form) form.addEventListener('submit', (e) => { e.preventDefault(); aplicar(); });
+  aplicar();
+});
