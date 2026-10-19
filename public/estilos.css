@@ -1,0 +1,53 @@
+:root {
+  --fondo: #f5f6f8; --tarjeta: #fff; --texto: #1d2330; --suave: #5d6677; --borde: #dde1e8;
+  --acento: #1f5fbf; --acento-texto: #fff; --ok: #1d7a46; --ok-fondo: #e6f4ec; --error: #b3261e; --error-fondo: #fbe9e7;
+  --cabecera: #eef1f6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #14171c; --tarjeta: #1d2128; --texto: #e7eaf0; --suave: #a1a9b8; --borde: #343a45;
+    --acento: #6ea0ff; --acento-texto: #0d1220; --ok: #7fd4a0; --ok-fondo: #183325; --error: #ff9b91; --error-fondo: #3a1d1b;
+    --cabecera: #262b34;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--fondo); color: var(--texto); }
+header { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: var(--tarjeta); border-bottom: 1px solid var(--borde); flex-wrap: wrap; gap: 8px; }
+header nav { display: flex; gap: 16px; align-items: center; }
+.marca { font-weight: 700; color: var(--texto); text-decoration: none; }
+main { max-width: 1400px; margin: 0 auto; padding: 16px; }
+a { color: var(--acento); }
+h1 { font-size: 1.5rem; margin: 8px 0 12px; }
+h2 { font-size: 1.15rem; margin: 22px 0 10px; }
+.tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 16px; margin: 12px 0; }
+.login { max-width: 360px; margin: 60px auto; }
+label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-weight: 600; font-size: .9rem; }
+input { font: inherit; padding: 7px 9px; border: 1px solid var(--borde); border-radius: 6px; background: var(--fondo); color: var(--texto); min-width: 0; }
+button, .boton { font: inherit; font-weight: 600; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--acento); background: var(--acento); color: var(--acento-texto); cursor: pointer; text-decoration: none; display: inline-block; }
+.secundario, .boton.secundario { background: transparent; color: var(--acento); }
+.enlace { background: none; border: 0; color: var(--acento); padding: 0; font-weight: 400; text-decoration: underline; }
+.peligro { color: var(--error); }
+.botones { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+.fila { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.fila label { margin: 0; flex: 1 1 260px; }
+.subir { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.subir label { flex: 1 1 300px; margin: 0; }
+.nota { color: var(--suave); font-size: .9rem; }
+.ok { background: var(--ok-fondo); color: var(--ok); padding: 8px 12px; border-radius: 6px; }
+.error { background: var(--error-fondo); color: var(--error); padding: 8px 12px; border-radius: 6px; }
+.si { color: var(--ok); font-weight: 600; } .no { color: var(--error); font-weight: 600; }
+table { border-collapse: collapse; width: 100%; background: var(--tarjeta); font-size: .88rem; }
+th, td { border: 1px solid var(--borde); padding: 5px 8px; text-align: left; vertical-align: top; }
+th { background: var(--cabecera); font-weight: 600; white-space: nowrap; }
+td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td input { width: 100%; }
+tfoot td, tr.tot td { font-weight: 700; background: var(--cabecera); }
+tr.sub td { font-weight: 600; }
+.acciones { white-space: nowrap; } .acciones a, .acciones form { margin-right: 10px; display: inline; }
+.scroll { overflow-x: auto; border: 1px solid var(--borde); border-radius: 8px; margin: 8px 0; }
+.scroll table { width: max-content; min-width: 100%; }
+.planilla .fija { position: sticky; left: 0; background: var(--tarjeta); z-index: 1; min-width: 220px; }
+.planilla th.fija { background: var(--cabecera); }
+.cuadre { width: auto; margin: 10px 0; }
+.avisos { margin: 10px 0; } .avisos summary { cursor: pointer; font-weight: 600; }
+.migas { margin: 0; font-size: .9rem; }

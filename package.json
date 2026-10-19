@@ -1,0 +1,21 @@
+{
+  "name": "sipe-planilla03",
+  "version": "1.0.0",
+  "description": "Genera la Planilla 03 y el Informe 03 (DGI) desde el detalle de planilla de la CSS",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "express": "^4.22.3",
+    "multer": "^2.4.0",
+    "mysql2": "^3.24.6"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  }
+}
