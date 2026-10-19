@@ -9,7 +9,7 @@ const ExcelJS = require('exceljs');
 const { parseDetalleCSS } = require('../src/parseDetalleCSS');
 const { construirInforme03, excelInforme03, COLUMNAS } = require('../src/informe03');
 const { construirPlanilla03, excelPlanilla03, isrAnual } = require('../src/planilla03');
-const { periodoDesdeTexto } = require('../src/util');
+const { periodoDesdeTexto, round2 } = require('../src/util');
 const { FileStore } = require('../src/store/fileStore');
 const { Servicio } = require('../src/servicio');
 
@@ -21,7 +21,10 @@ test('lee encabezado, totales y empleados del detalle de la CSS', async () => {
   assert.equal(d.empresa.patronal, '87-000-00000');
   assert.equal(d.periodo, '202608');
   assert.equal(d.empleados.length, 4);
+  // El primer empleado viene con "Pasaporte" en el encabezado en vez de "Cédula".
   const juan = d.empleados.find((e) => e.cedula === '8-100-200');
+  assert.equal(juan.tipoDocumento, 'pasaporte');
+  assert.equal(d.totales.SALARIO, round2(d.empleados.reduce((s, e) => s + e.salario, 0)));
   assert.equal(juan.salario, 720);
   assert.deepEqual(juan.componentes.PRIMA_PRODUCCION, { reportado: 400, constituyeSalario: 80 });
   assert.equal(juan.componentes.ISR.reportado, 36);

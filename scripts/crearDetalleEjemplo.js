@@ -7,7 +7,7 @@ const ExcelJS = require('exceljs');
 const fmt = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const EMPLEADOS = [
-  { ss: '1000001', cedula: '8-100-200', apellido: 'PEREZ', nombre: 'JUAN', sexo: 'Masculino',
+  { ss: '1000001', cedula: '8-100-200', apellido: 'PEREZ', nombre: 'JUAN', sexo: 'Masculino', doc: 'Pasaporte',
     comp: [['Primas de Producción', 400, 80], ['Décimo tercer mes', 213.33, 0], ['Sueldo', 640, 640], ['Impuesto sobre la renta', 36, 0]] },
   { ss: '', cedula: '4-50-60', apellido: 'GOMEZ', nombre: 'ANA', sexo: 'Femenino',
     comp: [['Vacaciones', 800.29, 800.29], ['Décimo tercer mes', 249.9, 0]],
@@ -45,7 +45,7 @@ async function crearDetalleEjemplo(destino, mesCuota = 'Agosto 2026') {
 
   let r = 17;
   for (const e of EMPLEADOS) {
-    set(r, 2, 'Seguro Social'); set(r, 3, 'Cédula'); set(r, 4, 'Apellido'); set(r, 6, 'Nombre'); set(r, 11, 'Sexo'); r++;
+    set(r, 2, 'Seguro Social'); set(r, 3, e.doc || 'Cédula'); set(r, 4, 'Apellido'); set(r, 6, 'Nombre'); set(r, 11, 'Sexo'); r++;
     set(r, 2, e.ss); set(r, 3, e.cedula); set(r, 4, e.apellido); set(r, 6, e.nombre); set(r, 11, e.sexo); r++;
     set(r, 2, 'Componentes'); set(r, 4, 'Montos Reportados (B/.)'); set(r, 7, 'Montos que Constituyen Salario'); r++;
     for (const [n, rep, sal] of e.comp) { set(r, 2, n); set(r, 4, fmt(rep)); set(r, 7, fmt(sal)); r++; }
