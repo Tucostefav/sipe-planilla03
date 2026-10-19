@@ -62,7 +62,13 @@ test('Informe 03: mapeo de columnas, orden por cédula y fórmulas', async () =>
   assert.equal(juan.DTM, 213.33);
   assert.equal(juan.IMPUESTO_RENTA, 36);
   assert.equal(juan.RENTA_NETA_GRAVABLE, 1253.33);
-  assert.equal(juan.A_FAVOR_DEL_FISCO, 36);
+  assert.equal(juan.RETENCIONES_SALARIO, 36, 'retención = ISR');
+  assert.equal(juan.RETENCIONES_GR, juan.IMP_RENTA_REPRESENTACION);
+  for (const f of inf.filas) {
+    assert.equal(f.RETENCIONES_SALARIO, f.IMPUESTO_RENTA);
+    assert.equal(f.A_FAVOR_DEL_FISCO, 0);
+    assert.equal(f.A_FAVOR_DEL_EMPLEADO, 0);
+  }
   const ana = inf.filas.find((f) => f.NUMERO_DOCUMENTO === '4-50-60');
   assert.equal(ana.SUELDO, 0);
   assert.equal(ana.VACACIONES, 800.29);

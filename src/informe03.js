@@ -56,6 +56,10 @@ function construirInforme03(detalle, { idPlanilla, buscarEmpleado }) {
       for (const [col, cod] of Object.entries(DESDE_COMPONENTE)) {
         f[col] = round2((e.componentes[cod] || {}).reportado || 0);
       }
+      // El ISR del mes ya fue retenido en planilla: las retenciones copian el impuesto,
+      // así A_FAVOR_DEL_FISCO y A_FAVOR_DEL_EMPLEADO quedan en 0.
+      f.RETENCIONES_SALARIO = f.IMPUESTO_RENTA;
+      f.RETENCIONES_GR = f.IMP_RENTA_REPRESENTACION;
       calcularFormulas(f);
       if (!m || !m.nombreCompleto) avisos.push({ cedula: e.cedula, tipo: 'nombre', texto: `${e.cedula}: no está en el maestro de empleados; se usó el nombre de la CSS (${f.NOMBRE_EMPLEADO}).` });
       if (!m || m.dv === undefined || m.dv === null || m.dv === '') avisos.push({ cedula: e.cedula, tipo: 'dv', texto: `${e.cedula}: no tiene DV en el maestro; se puso 0.` });
