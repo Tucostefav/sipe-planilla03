@@ -8,7 +8,7 @@ const { Servicio } = require('./servicio');
 const { rucDGI } = require('./util');
 const { excelInforme03, nombreArchivoInforme03 } = require('./informe03');
 const { excelPlanilla03, nombreArchivoPlanilla03 } = require('./planilla03');
-const { excelTalonarios, pdfTalonarios, nombreArchivoTalonarios, modoValido } = require('./talonarios');
+const { excelTalonarios, pdfTalonarios, zipTalonarios, nombreArchivoTalonario, nombreArchivoTalonarios, modoValido } = require('./talonarios');
 
 const MAX_ARCHIVOS = 36;
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -166,14 +166,29 @@ function crearApp({ store, auth }) {
     res.attachment(nombreArchivoTalonarios(rucDGI(t.empresa), t.detalle.periodo, modo)).type(XLSX_MIME).send(Buffer.from(buf));
   }));
 
-  // ?ver=1 lo abre en el navegador; sin eso se descarga.
+  // ?ver=1 lo abre en el navegador; sin eso se descarga. ?cedula= deja solo a ese empleado.
   app.get('/empresa/:ruc/talonarios/:periodo/pdf', envolver(async (req, res) => {
     const modo = modoValido(req.query.modo);
     const t = await svc.talonarios(req.params.ruc, req.params.periodo, modo, { conLogo: true });
     if (!t) return res.sendStatus(404);
+    let nombre = nombreArchivoTalonarios(rucDGI(t.empresa), t.detalle.periodo, modo, 'pdf');
+    if (req.query.cedula) {
+      const uno = t.resultado.talonarios.find((x) => x.cedula === String(req.query.cedula));
+      if (!uno) return res.sendStatus(404);
+      t.resultado = { ...t.resultado, talonarios: [uno] };
+      nombre = nombreArchivoTalonario(uno, t.detalle.periodo, modo);
+    }
     const buf = await pdfTalonarios(t);
-    const nombre = nombreArchivoTalonarios(rucDGI(t.empresa), t.detalle.periodo, modo, 'pdf');
     res.set('Content-Disposition', `${req.query.ver ? 'inline' : 'attachment'}; filename="${nombre}"`).type('application/pdf').send(buf);
+  }));
+
+  // Un PDF por empleado, todos juntos en un ZIP.
+  app.get('/empresa/:ruc/talonarios/:periodo/zip', envolver(async (req, res) => {
+    const modo = modoValido(req.query.modo);
+    const t = await svc.talonarios(req.params.ruc, req.params.periodo, modo, { conLogo: true });
+    if (!t) return res.sendStatus(404);
+    const buf = await zipTalonarios(t);
+    res.attachment(nombreArchivoTalonarios(rucDGI(t.empresa), t.detalle.periodo, modo, 'zip')).type('application/zip').send(buf);
   }));
 
   app.get('/empresa/:ruc/logo.png', envolver(async (req, res) => {

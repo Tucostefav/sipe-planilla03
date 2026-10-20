@@ -143,6 +143,21 @@ test('flujo completo por HTTP: entrar, subir, ver y descargar', async (t) => {
   assert.equal(r.headers.get('content-type'), 'application/pdf');
   assert.match(r.headers.get('content-disposition'), /^inline; filename="Talonarios_12345-678-90_202608_1ra-quincena\.pdf"/);
   assert.equal(Buffer.from(await r.arrayBuffer()).subarray(0, 5).toString(), '%PDF-');
+  assert.match(html, /pdf\?modo=1&amp;cedula=8-100-200&amp;ver=1/);
+  r = await get('/empresa/1234-5-67890/talonarios/202608/pdf?modo=2&cedula=8-100-200');
+  assert.match(r.headers.get('content-disposition'), /^attachment; filename="Talonario_.*_8-100-200_202608_2da-quincena\.pdf"/);
+  assert.equal(Buffer.from(await r.arrayBuffer()).subarray(0, 5).toString(), '%PDF-');
+  assert.equal((await get('/empresa/1234-5-67890/talonarios/202608/pdf?cedula=no-existe')).status, 404);
+  r = await get('/empresa/1234-5-67890/talonarios/202608/zip?modo=mes');
+  assert.equal(r.headers.get('content-type'), 'application/zip');
+  assert.match(r.headers.get('content-disposition'), /Talonarios_12345-678-90_202608_.*\.zip/);
+  const zip = Buffer.from(await r.arrayBuffer());
+  const empleados = (html.match(/<article class="talonario"/g) || []).length;
+  assert.equal(zip.readUInt16LE(zip.length - 12), empleados);
+  const largoNombre = zip.readUInt16LE(26);
+  assert.match(zip.subarray(30, 30 + largoNombre).toString(), /^Talonario_.*\.pdf$/);
+  const primero = require('zlib').inflateRawSync(zip.subarray(30 + largoNombre, 30 + largoNombre + zip.readUInt32LE(18)));
+  assert.equal(primero.subarray(0, 5).toString(), '%PDF-');
   r = await fetch(`${base}/empresa/1234-5-67890/logo/borrar`, { method: 'POST', headers: { cookie }, redirect: 'manual' });
   assert.equal((await get('/empresa/1234-5-67890/logo.png')).status, 404);
 

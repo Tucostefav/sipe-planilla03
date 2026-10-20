@@ -3,6 +3,7 @@
 const ExcelJS = require('exceljs');
 const { round2, MESES } = require('./util');
 const { valoresMes, tasas } = require('./planilla03');
+const { crearZip } = require('./zip');
 
 // Ingresos del detalle que van en el talonario (el XIII y el gasto de representación van aparte).
 const INGRESOS = [
@@ -126,6 +127,12 @@ function nombreEmpresaTalonario(empresa) {
 
 function nombreArchivoTalonarios(ruc, periodo, modo, ext = 'xlsx') {
   return `Talonarios_${ruc}_${periodo}_${MODOS[modoValido(modo)].archivo}.${ext}`;
+}
+
+// Nombre del PDF de un solo empleado; sin tildes ni símbolos para que abra bien en cualquier equipo.
+function nombreArchivoTalonario(t, periodo, modo) {
+  const limpio = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9-]+/g, '_').replace(/^_+|_+$/g, '');
+  return `Talonario_${limpio(t.nombre) || 'empleado'}_${limpio(t.cedula)}_${periodo}_${MODOS[modoValido(modo)].archivo}.pdf`;
 }
 
 // Colores de la marca de la empresa (los toma del logo); si no tiene, verde y tinta de la app.
@@ -402,4 +409,14 @@ function pdfTalonarios({ empresa, resultado, logo }) {
   return listo;
 }
 
-module.exports = { construirTalonarios, excelTalonarios, pdfTalonarios, nombreArchivoTalonarios, nombreEmpresaTalonario, coloresTalonario, limpiarConceptos, modoValido, MODOS, tituloPeriodo };
+// Un PDF por empleado, todos dentro de un ZIP.
+async function zipTalonarios({ empresa, detalle, resultado, logo }) {
+  const archivos = [];
+  for (const t of resultado.talonarios) {
+    const datos = await pdfTalonarios({ empresa, resultado: { ...resultado, talonarios: [t] }, logo });
+    archivos.push({ nombre: nombreArchivoTalonario(t, detalle.periodo, resultado.modo), datos });
+  }
+  return crearZip(archivos);
+}
+
+module.exports = { construirTalonarios, excelTalonarios, pdfTalonarios, zipTalonarios, nombreArchivoTalonario, nombreArchivoTalonarios, nombreEmpresaTalonario, coloresTalonario, limpiarConceptos, modoValido, MODOS, tituloPeriodo };

@@ -376,6 +376,7 @@ ${linea('Total deducciones', t.totalDeducciones, { clase: 'sub' })}
 ${t.adicionales.map((a) => linea(`Más: ${a.concepto}`, a.monto)).join('')}
 </ul>
 <p class="t-neto"><span>${h(resultado.etiquetaNeto.toLowerCase())}</span><strong class="mono">B/. ${fmt(t.neto)}</strong></p>
+<p class="t-pdf"><a href="${url}/pdf?modo=${modo}&amp;cedula=${enc(t.cedula)}&amp;ver=1" target="_blank" rel="noopener">Ver PDF</a> · <a href="${url}/pdf?modo=${modo}&amp;cedula=${enc(t.cedula)}">Descargar PDF</a></p>
 <details class="t-editar"><summary>Descuentos, adicionales y correo</summary>
 <form method="post" action="${url}/ajuste">
 <input type="hidden" name="cedula" value="${h(t.cedula)}"><input type="hidden" name="modo" value="${h(modo)}"><input type="hidden" name="filas" value="${filas.length}">
@@ -396,6 +397,7 @@ ${t.adicionales.map((a) => linea(`Más: ${a.concepto}`, a.monto)).join('')}
 <nav class="pestanas" aria-label="Periodo del talonario">${Object.entries(MODOS).map(([k, m]) => `<a href="${url}?modo=${k}"${k === modo ? ' aria-current="page"' : ''}>${h(m.corto)}</a>`).join('')}</nav>
 <div class="botones"><a class="boton" href="${url}/pdf?modo=${modo}&amp;ver=1" target="_blank" rel="noopener">Ver PDF</a>
 <a class="boton secundario" href="${url}/pdf?modo=${modo}">Descargar PDF</a>
+<a class="boton secundario" href="${url}/zip?modo=${modo}">Descargar un PDF por empleado (ZIP)</a>
 <a class="boton secundario" href="${url}/excel?modo=${modo}">Descargar Excel</a></div>
 ${empresa.logo ? '' : `<p class="nota">Sin logo. <a href="${base}#marca">Súbelo en la página de la empresa</a> para que salga en el PDF y el Excel.</p>`}</div>
 </section>
