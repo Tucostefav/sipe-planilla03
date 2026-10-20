@@ -6,6 +6,7 @@ const { parseDetalleCSS } = require('./parseDetalleCSS');
 const { construirInforme03 } = require('./informe03');
 const { construirPlanilla03 } = require('./planilla03');
 const { construirTalonarios, limpiarConceptos } = require('./talonarios');
+const { prepararLogo } = require('./logo');
 
 // Colecciones: empresas (id = RUC), detalles (id = RUC|AAAAMM), empleados (id = cédula),
 // talonarios (id = RUC|cédula: correo y descuentos o adicionales fijos de cada empleado),
@@ -93,14 +94,15 @@ class Servicio {
     return doc ? Buffer.from(doc.png, 'base64') : null;
   }
 
-  /** Guarda el logo (data URL PNG, ya sin fondo) y los colores de la marca. */
-  async guardarLogo(ruc, dataUrl, { principal, secundario } = {}) {
-    const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
-    const png = m && Buffer.from(m[1], 'base64');
-    if (!png || png.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('El logo debe ser una imagen. Elige un JPG o PNG.');
-    if (png.length > 2 * 1024 * 1024) throw new Error('El logo es demasiado grande (máximo 2 MB).');
+  /**
+   * Guarda el logo (JPG o PNG tal como lo subieron): se le quita el fondo y se recorta aquí.
+   * Si no se escogieron colores a mano, se usan los del logo.
+   */
+  async guardarLogo(ruc, imagen, { principal, secundario, coloresManual = false } = {}) {
+    const { png, colores } = prepararLogo(imagen);
     await this.store.put('logos', ruc, { ruc, png: png.toString('base64') });
-    await this.guardarEmpresa(ruc, { logo: Date.now(), colores: limpiarColores({ principal, secundario }) });
+    const elegidos = coloresManual ? { principal, secundario } : { principal: colores.principal || principal, secundario: colores.secundario || secundario };
+    await this.guardarEmpresa(ruc, { logo: Date.now(), colores: limpiarColores(elegidos) });
   }
 
   async guardarColores(ruc, colores) {

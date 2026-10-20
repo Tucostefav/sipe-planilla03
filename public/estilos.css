@@ -356,3 +356,4 @@ input[type="color"] { width: 44px; height: 32px; padding: 2px; border-radius: 6p
 .muestras { display: flex; gap: 6px; margin: 0; }
 .muestras span { width: 28px; height: 14px; border-radius: 3px; border: 1px solid var(--linea); }
 .marca-form .boton { align-self: flex-start; }
+.logo-vista[hidden] { display: none; }

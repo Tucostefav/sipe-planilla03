@@ -55,15 +55,17 @@ document.querySelectorAll('[data-filtro-tarjetas]').forEach((input) => {
   });
 });
 
-// Logo de la empresa: se le quita el fondo blanco en el navegador (queda transparente),
-// se recorta a su contenido y se sacan sus dos colores principales para los talonarios.
+// Logo de la empresa: vista previa sin fondo y sus dos colores principales. El servidor hace
+// lo mismo al guardar, así que esto solo muestra cómo va a quedar.
 document.querySelectorAll('[data-logo]').forEach((form) => {
   const archivo = form.querySelector('input[type="file"]');
-  const dato = form.querySelector('input[name="logo"]');
+  const manual = form.querySelector('input[name="coloresManual"]');
   const vista = form.querySelector('[data-logo-vista]');
   const colores = [...form.querySelectorAll('input[type="color"]')];
   const boton = form.querySelector('button');
   const hex = (c) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+  colores.forEach((c) => c.addEventListener('input', () => { manual.value = '1'; }));
+  form.addEventListener('submit', () => { if (boton) boton.textContent = 'Guardando…'; });
 
   archivo.addEventListener('change', () => {
     const f = archivo.files && archivo.files[0];
@@ -123,12 +125,13 @@ document.querySelectorAll('[data-logo]').forEach((form) => {
       const out = document.createElement('canvas');
       out.width = Math.round(cw * fin); out.height = Math.round(ch * fin);
       out.getContext('2d').drawImage(cv, Math.max(0, x0 - m), Math.max(0, y0 - m), cw, ch, 0, 0, out.width, out.height);
-      dato.value = out.toDataURL('image/png');
+      const vistaPng = out.toDataURL('image/png');
       const top = [...grupos.values()].sort((a, b) => b.n - a.n).slice(0, 2).map((gr) => hex([gr.r / gr.n, gr.g / gr.n, gr.b / gr.n]));
       top.forEach((c, i) => { if (colores[i]) colores[i].value = c; });
+      manual.value = '';
       vista.innerHTML = '';
       const muestra = new Image();
-      muestra.src = dato.value;
+      muestra.src = vistaPng;
       muestra.alt = 'Logo sin fondo';
       vista.appendChild(muestra);
       vista.hidden = false;
