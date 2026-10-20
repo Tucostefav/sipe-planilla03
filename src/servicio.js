@@ -5,8 +5,10 @@ const { cellText, norm, compararCedula } = require('./util');
 const { parseDetalleCSS } = require('./parseDetalleCSS');
 const { construirInforme03 } = require('./informe03');
 const { construirPlanilla03 } = require('./planilla03');
+const { construirTalonarios, limpiarConceptos } = require('./talonarios');
 
-// Colecciones: empresas (id = RUC), detalles (id = RUC|AAAAMM), empleados (id = cédula).
+// Colecciones: empresas (id = RUC), detalles (id = RUC|AAAAMM), empleados (id = cédula),
+// talonarios (id = RUC|cédula: correo y descuentos o adicionales fijos de cada empleado).
 class Servicio {
   constructor(store) {
     this.store = store;
@@ -74,6 +76,21 @@ class Servicio {
     const detalles = (await this.listarDetalles(ruc)).filter((d) => String(d.periodo).startsWith(String(anio)));
     const buscar = await this.buscador();
     return { empresa, planilla: construirPlanilla03({ anio, detalles, buscarEmpleado: buscar }) };
+  }
+
+  async talonarios(ruc, periodo, modo) {
+    const [empresa, detalle, ajustes] = await Promise.all([this.empresa(ruc), this.detalle(ruc, periodo), this.store.list('talonarios', `${ruc}|`)]);
+    if (!empresa || !detalle) return null;
+    const porCedula = new Map(ajustes.map((a) => [a.cedula, a]));
+    return { empresa, detalle, resultado: construirTalonarios(detalle, { modo, ajustes: (c) => porCedula.get(c) || null }) };
+  }
+
+  async guardarAjusteTalonario(ruc, cedula, { correo, conceptos }) {
+    const id = String(cedula).trim().toUpperCase();
+    if (!id) throw new Error('Falta la cédula.');
+    const doc = { ruc, cedula: id, correo: String(correo || '').trim(), conceptos: limpiarConceptos(conceptos) };
+    await this.store.put('talonarios', `${ruc}|${id}`, doc);
+    return doc;
   }
 
   // ---------- Maestro de empleados ----------

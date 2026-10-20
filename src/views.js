@@ -3,6 +3,7 @@
 const { escapeHtml: h, nombreMes, MESES, rucDGI } = require('./util');
 const { COLUMNAS } = require('./informe03');
 const { MESES_MAYUS, MESES_CORTOS } = require('./planilla03');
+const { MODOS, nombreEmpresaTalonario } = require('./talonarios');
 
 const fmt = (n) => (n === null || n === undefined || n === '' ? '' : Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const enc = encodeURIComponent;
@@ -146,7 +147,8 @@ function resultadoCarga({ empresa, detalle, informe, reemplazo, faltantes, usuar
 <p class="subtitulo">${h(mes)} · ${plural(detalle.empleados.length, 'empleado reportado', 'empleados reportados')} a la CSS${detalle.archivo ? ` · <span class="mono">${h(detalle.archivo)}</span>` : ''}</p>
 <div class="botones"><a class="boton" href="${base}/informe03/${detalle.periodo}">Ver Informe 03</a>
 <a class="boton secundario" href="${base}/informe03/${detalle.periodo}/excel">Descargar Excel DGI</a>
-<a class="boton secundario" href="${base}/planilla03/${anio}">Ver Planilla 03 ${anio}</a></div></div>
+<a class="boton secundario" href="${base}/planilla03/${anio}">Ver Planilla 03 ${anio}</a>
+<a class="boton secundario" href="${base}/talonarios/${detalle.periodo}">Talonarios</a></div></div>
 ${sello(informe.cuadres, { mes })}
 </section>
 ${cuadres(informe.cuadres)}
@@ -199,6 +201,7 @@ ${ok.map((r) => {
 <td class="n">${r.detalle.empleados.length}</td><td>${cuadra ? '<span class="chip verde">Cuadra</span>' : '<span class="chip rojo">No cuadra</span>'}</td>
 <td class="mono suave">${h(r.archivo)}</td>
 <td class="acciones"><a class="boton pequeno" href="${base}/informe03/${r.detalle.periodo}/excel">Descargar Informe 03</a>
+<a href="${base}/talonarios/${r.detalle.periodo}">Talonarios</a>
 <a href="/carga/${enc(r.empresa.ruc)}/${r.detalle.periodo}">Revisar</a></td></tr>`;
   }).join('') || '<tr><td colspan="6">Ningún archivo se pudo procesar.</td></tr>'}
 </tbody></table></div>
@@ -224,6 +227,8 @@ function empresaPagina({ empresa, detalles, usuario, aviso }) {
 <input name="idPlanilla" value="${h(empresa.idPlanilla || '')}" inputmode="numeric" class="mono" placeholder="Ej. 75842369"></label>
 <label>RUC con guiones <span class="nota">La CSS lo trae como ${h(empresa.ruc)}. Escríbelo separado por guiones como va a la DGI; se usa en el Informe 03 y la Planilla 03.</span>
 <input name="rucDGI" value="${h(empresa.rucDGI || empresa.ruc)}" class="mono" autocomplete="off"></label>
+<label>Nombre en los talonarios <span class="nota">Va arriba de cada talonario de pago. Si lo dejas vacío se usa ${h(empresa.nombreComercial || empresa.razonSocial || 'el nombre de la CSS')}.</span>
+<input name="nombreTalonario" value="${h(empresa.nombreTalonario || '')}" autocomplete="off"></label>
 <button class="boton secundario">Guardar</button></form>
 </section>
 ${anios.map((a) => `<section class="anio">
@@ -235,6 +240,7 @@ ${detalles.length ? `<h2>Meses cargados</h2>
 <div class="scroll"><table><thead><tr><th>Mes</th><th class="n">Empleados</th><th class="n">Salario</th><th>Archivo</th><th></th></tr></thead><tbody>
 ${detalles.map((d) => `<tr><td>${h(nombreMes(d.periodo))}</td><td class="n">${d.empleados.length}</td><td class="n">${fmt(d.totales.SALARIO)}</td>
 <td class="mono suave">${h(d.archivo || '')}</td><td class="acciones"><a href="${base}/informe03/${d.periodo}">Informe 03</a>
+<a href="${base}/talonarios/${d.periodo}">Talonarios</a>
 <a href="/carga/${enc(empresa.ruc)}/${d.periodo}">Revisar</a>
 <form method="post" action="${base}/borrar/${d.periodo}" onsubmit="return confirm('¿Borrar ${h(nombreMes(d.periodo))}? Se quita también de la Planilla 03.')"><button class="enlace peligro">Borrar</button></form></td></tr>`).join('')}
 </tbody></table></div>` : ''}
@@ -259,7 +265,8 @@ function informe03Pagina({ empresa, detalle, filas, avisos, cuadres: cs, totales
 <div><p class="ceja">Informe 03 · DGI</p><h1>${h(nombreMes(detalle.periodo))}</h1>
 <p class="subtitulo">${h(empresa.razonSocial)} · ${plural(filas.length, 'empleado', 'empleados')}</p>
 <div class="botones"><a class="boton" href="${base}/informe03/${detalle.periodo}/excel">Descargar Excel para la DGI</a>
-<a class="boton secundario" href="${base}/planilla03/${anioDe(detalle.periodo)}">Planilla 03 ${anioDe(detalle.periodo)}</a></div></div>
+<a class="boton secundario" href="${base}/planilla03/${anioDe(detalle.periodo)}">Planilla 03 ${anioDe(detalle.periodo)}</a>
+<a class="boton secundario" href="${base}/talonarios/${detalle.periodo}">Talonarios</a></div></div>
 ${sello(cs, { compacto: true })}
 </section>
 ${cuadres(cs)}
@@ -317,6 +324,57 @@ ${filaRes('Total calculado', 'total', 'tot')}${filaRes('Total según detalle CSS
 </tbody></table></div>`, { usuario, seccion: 'empresas' });
 }
 
+// Talonarios de pago de un mes: uno por empleado, como el modelo en Excel, con sus descuentos
+// y adicionales fijos editables en el mismo talonario.
+function talonariosPagina({ empresa, detalle, resultado, usuario, aviso, error }) {
+  const base = `/empresa/${enc(empresa.ruc)}`;
+  const url = `${base}/talonarios/${detalle.periodo}`;
+  const { modo, talonarios: ts } = resultado;
+  const totalNeto = ts.reduce((s, t) => s + t.neto, 0);
+  const linea = (concepto, monto, { clase = '', col = 'd' } = {}) => `<li class="${col}${clase ? ` ${clase}` : ''}"><span>${h(concepto)}</span><span class="mono">${monto ? fmt(monto) : ''}</span></li>`;
+  const tarjeta = (t) => {
+    const filas = [...t.conceptos, { tipo: 'descuento', nombre: '', monto: '' }, { tipo: 'adicional', nombre: '', monto: '' }];
+    return `<article class="talonario" id="t-${h(t.cedula)}">
+<header><p class="t-empresa">${h(nombreEmpresaTalonario(empresa))}</p><p class="t-titulo">Talonario de pago</p>
+<h3>${h(t.nombre)}</h3>${t.correo ? `<p class="t-correo">${h(t.correo)}</p>` : ''}<p class="mono t-ced">CED. ${h(t.cedula)}</p></header>
+<ul class="t-lineas">
+${t.ingresos.map((i) => linea(i.concepto, i.monto)).join('')}
+${linea(modo === 'mes' ? 'Sub-total mes' : 'Sub-total quincena', t.subtotal, { col: 'e', clase: 'sub' })}
+${linea('Más: XIII mes', t.xiii, { col: 'e' })}
+${t.gr ? linea('Más: gasto de representación', t.gr, { col: 'e' }) : ''}
+<li class="t-grupo">Menos:</li>
+${t.deducciones.map((d) => linea(d.concepto, d.monto, { clase: 'ded' })).join('')}
+${linea('Total deducciones', t.totalDeducciones, { clase: 'sub' })}
+${t.adicionales.map((a) => linea(`Más: ${a.concepto}`, a.monto)).join('')}
+</ul>
+<p class="t-neto"><span>${h(resultado.etiquetaNeto.toLowerCase())}</span><strong class="mono">B/. ${fmt(t.neto)}</strong></p>
+<details class="t-editar"><summary>Descuentos, adicionales y correo</summary>
+<form method="post" action="${url}/ajuste">
+<input type="hidden" name="cedula" value="${h(t.cedula)}"><input type="hidden" name="modo" value="${h(modo)}"><input type="hidden" name="filas" value="${filas.length}">
+<p class="nota">Montos por quincena. Se repiten en cada talonario hasta que los cambies; para quitar uno, borra su monto.</p>
+<div class="t-conceptos">${filas.map((c, i) => `<div class="t-concepto">
+<select name="tipo_${i}" aria-label="Tipo"><option value="descuento"${c.tipo === 'descuento' ? ' selected' : ''}>Menos</option><option value="adicional"${c.tipo === 'adicional' ? ' selected' : ''}>Más</option></select>
+<input name="nombre_${i}" value="${h(c.nombre)}" placeholder="${c.tipo === 'adicional' ? 'Ej. Transporte' : 'Ej. Préstamo Banco General'}" aria-label="Concepto">
+<input name="monto_${i}" value="${c.monto === '' ? '' : h(Number(c.monto).toFixed(2))}" inputmode="decimal" class="mono monto" placeholder="0.00" aria-label="Monto"></div>`).join('')}</div>
+<label>Correo <input name="correo" type="email" value="${h(t.correo)}" placeholder="nombre@empresa.com" autocomplete="off"></label>
+<button class="boton secundario pequeno">Guardar</button></form></details>
+</article>`;
+  };
+  return layout(`Talonarios ${detalle.periodo}`, `
+<p class="migas"><a href="/">Empresas</a> / <a href="${base}">${h(empresa.razonSocial)}</a></p>
+<section class="cabecera-informe">
+<div><p class="ceja">Talonarios de pago</p><h1>${h(resultado.titulo)}</h1>
+<p class="subtitulo">${h(empresa.razonSocial)} · ${plural(ts.length, 'empleado', 'empleados')} · neto a pagar B/. ${fmt(totalNeto)}</p>
+<nav class="pestanas" aria-label="Periodo del talonario">${Object.entries(MODOS).map(([k, m]) => `<a href="${url}?modo=${k}"${k === modo ? ' aria-current="page"' : ''}>${h(m.corto)}</a>`).join('')}</nav>
+<div class="botones"><a class="boton" href="${url}/excel?modo=${modo}">Descargar talonarios en Excel</a>
+<a class="boton secundario" href="${base}/informe03/${detalle.periodo}">Informe 03</a></div></div>
+</section>
+<p class="nota">Salen del detalle de la CSS de ${h(nombreMes(detalle.periodo))}. ${modo === 'mes' ? 'Montos del mes completo; los fijos por quincena van por dos.' : 'El mes se reparte en dos quincenas iguales (la 2da lleva los centavos que sobran) y el XIII mes va completo en la 1ra quincena.'} El SS y SE, el SS del XIII y el ISR suman lo mismo que reportó la CSS.</p>
+<div class="titulo-seccion"><h2>Talonarios</h2><span class="contador">${ts.length}</span>
+<input type="search" class="filtro" placeholder="Filtrar por cédula o nombre" data-filtro-tarjetas=".talonarios" aria-label="Filtrar talonarios"></div>
+<div class="talonarios">${ts.map(tarjeta).join('')}</div>`, { usuario, aviso, error, seccion: 'empresas' });
+}
+
 function empleadosPagina({ empleados, usuario, aviso, error, q }) {
   return layout('Empleados', `
 <section class="cabecera-empresa">
@@ -350,4 +408,4 @@ function errorPagina(mensaje, usuario) {
   return layout('Error', `<section class="panel"><h1>No se pudo completar</h1><p class="aviso-error">${h(mensaje)}</p><p><a class="boton secundario" href="/">Volver a empresas</a></p></section>`, { usuario });
 }
 
-module.exports = { login, inicio, resultadoCarga, resultadoLote, empresaPagina, informe03Pagina, planilla03Pagina, empleadosPagina, errorPagina };
+module.exports = { login, inicio, resultadoCarga, resultadoLote, empresaPagina, informe03Pagina, planilla03Pagina, talonariosPagina, empleadosPagina, errorPagina };

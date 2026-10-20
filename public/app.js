@@ -42,3 +42,15 @@ document.querySelectorAll('[data-filtro]').forEach((input) => {
   if (form) form.addEventListener('submit', (e) => { e.preventDefault(); aplicar(); });
   aplicar();
 });
+
+// Filtro instantáneo de tarjetas (talonarios) por cédula o nombre.
+document.querySelectorAll('[data-filtro-tarjetas]').forEach((input) => {
+  const caja = document.querySelector(input.dataset.filtroTarjetas);
+  if (!caja) return;
+  const tarjetas = [...caja.children];
+  const textos = tarjetas.map((t) => t.querySelector('header').textContent.toUpperCase());
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toUpperCase();
+    tarjetas.forEach((t, i) => { t.hidden = !!q && !textos[i].includes(q); });
+  });
+});

@@ -93,6 +93,22 @@ test('flujo completo por HTTP: entrar, subir, ver y descargar', async (t) => {
   r = await fetch(`${base}/empresa/1234-5-67890/config`, { method: 'POST', headers: { cookie }, redirect: 'manual', body: new URLSearchParams({ idPlanilla: '12345678', rucDGI: '999-1-2' }) });
   assert.match(decodeURIComponent(r.headers.get('location')), /mismos dígitos/);
 
+  // Talonarios del mes: descuentos y adicionales fijos por empleado, Excel por quincena.
+  html = await (await get('/empresa/1234-5-67890/talonarios/202608')).text();
+  assert.match(html, /1ra quincena de agosto de 2026/);
+  r = await fetch(`${base}/empresa/1234-5-67890/talonarios/202608/ajuste`, { method: 'POST', headers: { cookie }, redirect: 'manual',
+    body: new URLSearchParams({ cedula: '8-100-200', modo: '2', filas: '2', tipo_0: 'descuento', nombre_0: 'Vantia', monto_0: '25', tipo_1: 'adicional', nombre_1: 'Transporte', monto_1: '', correo: 'juan@prueba.com' }) });
+  assert.match(r.headers.get('location'), /talonarios\/202608\?modo=2&ok=.*#t-8-100-200$/);
+  html = await (await get('/empresa/1234-5-67890/talonarios/202608?modo=2')).text();
+  assert.match(html, /2da quincena de agosto de 2026/);
+  assert.match(html, /Vantia/);
+  assert.match(html, /juan@prueba\.com/);
+  assert.doesNotMatch(html, /Más: Transporte/);
+  r = await get('/empresa/1234-5-67890/talonarios/202608/excel?modo=2');
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('content-disposition'), /Talonarios_12345-678-90_202608_2da-quincena\.xlsx/);
+  await r.arrayBuffer();
+
   html = await (await get('/empleados?q=JUAN')).text();
   assert.match(html, /8-100-200/);
 

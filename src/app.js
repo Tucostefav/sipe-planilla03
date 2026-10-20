@@ -8,6 +8,7 @@ const { Servicio } = require('./servicio');
 const { rucDGI } = require('./util');
 const { excelInforme03, nombreArchivoInforme03 } = require('./informe03');
 const { excelPlanilla03, nombreArchivoPlanilla03 } = require('./planilla03');
+const { excelTalonarios, nombreArchivoTalonarios, modoValido } = require('./talonarios');
 
 const MAX_ARCHIVOS = 36;
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -106,6 +107,7 @@ function crearApp({ store, auth }) {
   app.post('/empresa/:ruc/config', envolver(async (req, res) => {
     const volver = `/empresa/${encodeURIComponent(req.params.ruc)}`;
     const cambios = { idPlanilla: String(req.body.idPlanilla || '').trim() };
+    if (req.body.nombreTalonario !== undefined) cambios.nombreTalonario = String(req.body.nombreTalonario).replace(/\s+/g, ' ').trim();
     if (req.body.rucDGI !== undefined) {
       const r = String(req.body.rucDGI).trim().toUpperCase().replace(/\s+/g, '');
       // Debe ser el mismo RUC de la CSS, solo que con guiones.
@@ -147,6 +149,33 @@ function crearApp({ store, auth }) {
     if (!p) return res.sendStatus(404);
     const buf = await excelPlanilla03(p);
     res.attachment(nombreArchivoPlanilla03(p.empresa, req.params.anio)).type(XLSX_MIME).send(Buffer.from(buf));
+  }));
+
+  app.get('/empresa/:ruc/talonarios/:periodo', envolver(async (req, res) => {
+    const t = await svc.talonarios(req.params.ruc, req.params.periodo, modoValido(req.query.modo));
+    if (!t) return res.status(404).send(V.errorPagina('No existe ese mes para esa empresa.', req.usuario));
+    res.send(V.talonariosPagina({ ...t, usuario: req.usuario, ...flash(req) }));
+  }));
+
+  app.get('/empresa/:ruc/talonarios/:periodo/excel', envolver(async (req, res) => {
+    const modo = modoValido(req.query.modo);
+    const t = await svc.talonarios(req.params.ruc, req.params.periodo, modo);
+    if (!t) return res.sendStatus(404);
+    const buf = await excelTalonarios(t);
+    res.attachment(nombreArchivoTalonarios(rucDGI(t.empresa), t.detalle.periodo, modo)).type(XLSX_MIME).send(Buffer.from(buf));
+  }));
+
+  // Correo y descuentos o adicionales fijos de un empleado; se repiten cada quincena.
+  app.post('/empresa/:ruc/talonarios/:periodo/ajuste', envolver(async (req, res) => {
+    const { ruc, periodo } = req.params;
+    const filas = Math.min(Number(req.body.filas) || 0, 50);
+    const conceptos = [];
+    for (let i = 0; i < filas; i++) {
+      conceptos.push({ tipo: req.body[`tipo_${i}`], nombre: req.body[`nombre_${i}`], monto: req.body[`monto_${i}`] });
+    }
+    const doc = await svc.guardarAjusteTalonario(ruc, req.body.cedula, { correo: req.body.correo, conceptos });
+    const volver = `/empresa/${encodeURIComponent(ruc)}/talonarios/${encodeURIComponent(periodo)}?modo=${modoValido(req.body.modo)}`;
+    res.redirect(`${volver}&ok=` + encodeURIComponent(`Talonario de ${doc.cedula} actualizado.`) + `#t-${encodeURIComponent(doc.cedula)}`);
   }));
 
   app.get('/empleados', envolver(async (req, res) => {

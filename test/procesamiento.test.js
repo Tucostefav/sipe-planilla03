@@ -9,6 +9,7 @@ const ExcelJS = require('exceljs');
 const { parseDetalleCSS } = require('../src/parseDetalleCSS');
 const { construirInforme03, excelInforme03, COLUMNAS } = require('../src/informe03');
 const { construirPlanilla03, excelPlanilla03, isrAnual } = require('../src/planilla03');
+const { construirTalonarios, excelTalonarios } = require('../src/talonarios');
 const { periodoDesdeTexto, round2 } = require('../src/util');
 const { FileStore } = require('../src/store/fileStore');
 const { Servicio } = require('../src/servicio');
@@ -162,6 +163,48 @@ test('Planilla 03: el gasto de representación no paga seguro educativo', () => 
   assert.equal(round2(r.sePatronal + r.seEmpleado), 41.25);
   assert.equal(round2(r.ssPatronal + r.ssEmpleado), 506);
   assert.equal(r.diferencia, 0);
+});
+
+test('Talonarios: quincenas que suman el mes de la CSS, descuentos y adicionales fijos', async () => {
+  // Como el modelo: sueldo + gasto de representación, un préstamo y transporte fijos por quincena.
+  const detalle = {
+    periodo: '202609', empresa: { razonSocial: 'EMPRESA DE PRUEBA, S.A.' }, totales: {},
+    empleados: [{ cedula: '8-1-1', nombre: 'ANA', apellido: 'PEREZ', salario: 2200, novedades: [], cuotas: {}, conceptosNoMapeados: [],
+      componentes: { SUELDO: { reportado: 1500, constituyeSalario: 1500 }, GASTO_REPRESENTACION: { reportado: 700, constituyeSalario: 700 }, ISR: { reportado: 176.15, constituyeSalario: 0 } } }],
+  };
+  const ajustes = () => ({ correo: 'ana@prueba.com', conceptos: [{ tipo: 'descuento', nombre: 'Préstamo', monto: 120.83 }, { tipo: 'adicional', nombre: 'Transporte', monto: 20 }] });
+  const [q1, q2, mes] = ['1', '2', 'mes'].map((modo) => construirTalonarios(detalle, { modo, ajustes }).talonarios[0]);
+  const ded = (t, c) => t.deducciones.find((d) => d.concepto === c).monto;
+  assert.equal(q1.ingresos[0].concepto, '1ra quincena de septiembre de 2026');
+  assert.equal(q1.subtotal, 750);
+  assert.equal(q1.gr, 350);
+  assert.equal(ded(q1, 'ISR del GR'), 35);
+  // SS 9.75% sobre todo (2,200) y SE 1.25% sin el gasto de representación (1,500).
+  assert.equal(ded(mes, 'SS y SE de Salario'), 233.25);
+  assert.equal(round2(ded(q1, 'SS y SE de Salario') + ded(q2, 'SS y SE de Salario')), 233.25);
+  assert.equal(round2(ded(q1, 'ISR') + ded(q2, 'ISR') + ded(q1, 'ISR del GR') + ded(q2, 'ISR del GR')), 176.15);
+  assert.equal(ded(q2, 'Préstamo'), 120.83);
+  assert.equal(ded(mes, 'Préstamo'), 241.66);
+  assert.equal(q1.neto, round2(750 + 350 - q1.totalDeducciones + 20));
+  assert.equal(round2(q1.neto + q2.neto), mes.neto);
+
+  // El XIII mes va completo en la 1ra quincena con su SS.
+  const ago = await parseDetalleCSS(FIXTURE);
+  const t1 = construirTalonarios(ago, { modo: '1' });
+  const juan = t1.talonarios.find((t) => t.cedula === '8-100-200');
+  assert.equal(juan.xiii, 213.33);
+  assert.equal(ded(juan, 'SS del XIII'), round2(213.33 * 0.0725));
+  assert.equal(construirTalonarios(ago, { modo: '2' }).talonarios.find((t) => t.cedula === '8-100-200').xiii, 0);
+
+  const buf = await excelTalonarios({ empresa: ago.empresa, resultado: t1 });
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+  const ws = wb.getWorksheet('Talonarios');
+  const filas = [];
+  ws.eachRow((row, n) => filas.push([n, row.getCell(1).value, row.getCell(5).value]));
+  assert.equal(filas.filter(([, a]) => a === 'TALONARIO  DE PAGO').length, ago.empleados.length);
+  const netas = filas.filter(([, a]) => a === 'QUINCENA NETA').map(([, , e]) => e.result);
+  assert.deepEqual(netas, t1.talonarios.map((t) => t.neto));
 });
 
 test('ISR anual por tramos', () => {
