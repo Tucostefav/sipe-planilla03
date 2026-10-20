@@ -264,8 +264,8 @@ function panelMarca(empresa) {
     : '<div class="logo-vista vacia">Sin logo</div>'}
 <p class="muestras"><span style="background:${h(principal)}"></span><span style="background:${h(secundario)}"></span></p></div>
 <form method="post" action="${base}/logo" class="marca-form" enctype="multipart/form-data" data-logo>
-<label>${empresa.logo ? 'Cambiar logo' : 'Subir logo'} <span class="nota">JPG o PNG. Se le quita el fondo blanco y se toman sus colores.</span>
-<input type="file" name="archivo" accept="image/png,image/jpeg" aria-label="Archivo del logo"></label>
+<label>${empresa.logo ? 'Cambiar logo' : 'Subir logo'} <span class="nota">JPG, JPEG o PNG. Se le quita el fondo blanco y se toman sus colores.</span>
+<input type="file" name="archivo" accept="image/*,.jpg,.jpeg,.jfif,.jpe,.png" aria-label="Archivo del logo"></label>
 <input type="hidden" name="coloresManual" value="">
 <div class="logo-vista nueva" data-logo-vista hidden></div>
 <div class="colores"><label>Color principal <input type="color" name="principal" value="${h(principal)}"></label>

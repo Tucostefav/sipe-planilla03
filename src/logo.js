@@ -15,6 +15,10 @@ function decodificar(buf) {
     const { width, height, data } = jpeg.decode(buf, { useTArray: true, formatAsRGBA: true, maxResolutionInMP: 60, maxMemoryUsageInMB: 512 });
     return { ancho: width, alto: height, datos: data };
   }
+  // Se reconoce por el contenido, no por el nombre: un .jpeg que en realidad es otro formato también llega aquí.
+  const cabecera = buf.subarray(0, 16).toString('latin1');
+  if (cabecera.startsWith('RIFF') && cabecera.slice(8, 12) === 'WEBP') throw new Error('Ese logo está en formato WebP aunque diga otra cosa. Ábrelo y guárdalo como JPG o PNG.');
+  if (cabecera.slice(4, 8) === 'ftyp') throw new Error('Ese logo está en formato HEIC (de iPhone). Ábrelo y guárdalo como JPG o PNG.');
   throw new Error('El logo debe ser una imagen JPG o PNG.');
 }
 
