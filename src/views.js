@@ -10,6 +10,9 @@ const enc = encodeURIComponent;
 const anioDe = (periodo) => String(periodo).slice(0, 4);
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 
+// Cambia en cada arranque para que el navegador no use un estilo o script viejo después de publicar.
+const VERSION = Date.now().toString(36);
+
 const FUENTES = 'https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&family=Spline+Sans+Mono:wght@400;500;600&display=swap';
 
 function layout(titulo, cuerpo, { usuario, aviso, error, seccion } = {}) {
@@ -19,7 +22,7 @@ function layout(titulo, cuerpo, { usuario, aviso, error, seccion } = {}) {
 <title>${h(titulo)} · Planilla 03</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${FUENTES}">
-<link rel="stylesheet" href="/estilos.css"><script src="/app.js" defer></script></head>
+<link rel="stylesheet" href="/estilos.css?v=${VERSION}"><script src="/app.js?v=${VERSION}" defer></script></head>
 <body>
 ${usuario ? `<header class="barra"><a class="marca" href="/">${marca()}<span class="marca-texto">Planilla 03<small>Detalle CSS → Informe DGI</small></span></a>
 <nav>${nav('/', 'Empresas', 'empresas')}${nav('/empleados', 'Empleados', 'empleados')}
@@ -260,10 +263,10 @@ function panelMarca(empresa) {
 <form method="post" action="${base}/logo/borrar" onsubmit="return confirm('¿Quitar el logo de los talonarios?')"><button class="enlace peligro">Quitar logo</button></form>`
     : '<div class="logo-vista vacia">Sin logo</div>'}
 <p class="muestras"><span style="background:${h(principal)}"></span><span style="background:${h(secundario)}"></span></p></div>
-<form method="post" action="${base}/logo" class="marca-form" data-logo>
+<form method="post" action="${base}/logo" class="marca-form" enctype="multipart/form-data" data-logo>
 <label>${empresa.logo ? 'Cambiar logo' : 'Subir logo'} <span class="nota">JPG o PNG. Se le quita el fondo blanco y se toman sus colores.</span>
-<input type="file" accept="image/png,image/jpeg,image/webp" aria-label="Archivo del logo"></label>
-<input type="hidden" name="logo">
+<input type="file" name="archivo" accept="image/png,image/jpeg" aria-label="Archivo del logo"></label>
+<input type="hidden" name="coloresManual" value="">
 <div class="logo-vista nueva" data-logo-vista hidden></div>
 <div class="colores"><label>Color principal <input type="color" name="principal" value="${h(principal)}"></label>
 <label>Color de acento <input type="color" name="secundario" value="${h(secundario)}"></label></div>

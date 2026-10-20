@@ -17,11 +17,11 @@ function crearApp({ store, auth }) {
   const svc = new Servicio(store);
   const app = express();
   const subir = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+  const subirLogo = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } }).single('archivo');
 
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
-  // El logo llega como data URL en el formulario de la empresa.
-  app.use(express.urlencoded({ extended: false, limit: '4mb' }));
+  app.use(express.urlencoded({ extended: false, limit: '2mb' }));
   app.use(express.static(path.join(__dirname, '..', 'public')));
   app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
@@ -182,23 +182,29 @@ function crearApp({ store, auth }) {
     res.set('Cache-Control', 'private, max-age=60').type('image/png').send(png);
   }));
 
-  // Logo sin fondo (lo prepara el navegador) y los colores de la marca para los talonarios.
-  app.post('/empresa/:ruc/logo', envolver(async (req, res) => {
+  // Logo de la empresa (JPG o PNG) y los colores de la marca para los talonarios.
+  app.post('/empresa/:ruc/logo', (req, res, next) => subirLogo(req, res, (err) => {
     const volver = `/empresa/${encodeURIComponent(req.params.ruc)}`;
-    if (!(await svc.empresa(req.params.ruc))) return res.status(404).send(V.errorPagina('Empresa no encontrada.', req.usuario));
-    const colores = { principal: req.body.principal, secundario: req.body.secundario };
-    try {
-      if (req.body.logo) await svc.guardarLogo(req.params.ruc, req.body.logo, colores);
-      else await svc.guardarColores(req.params.ruc, colores);
-    } catch (e) {
-      return res.redirect(`${volver}?error=` + encodeURIComponent(e.message) + '#marca');
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? 'El logo es demasiado grande (máximo 10 MB).' : 'No se pudo recibir el logo. Inténtalo otra vez.';
+      return res.redirect(`${volver}?error=` + encodeURIComponent(msg));
     }
-    res.redirect(`${volver}?ok=` + encodeURIComponent(req.body.logo ? 'Logo guardado. Ya sale en los talonarios.' : 'Colores guardados.') + '#marca');
+    envolver(async () => {
+      if (!(await svc.empresa(req.params.ruc))) return res.status(404).send(V.errorPagina('Empresa no encontrada.', req.usuario));
+      const colores = { principal: req.body.principal, secundario: req.body.secundario, coloresManual: req.body.coloresManual === '1' };
+      try {
+        if (req.file && req.file.size) await svc.guardarLogo(req.params.ruc, req.file.buffer, colores);
+        else await svc.guardarColores(req.params.ruc, colores);
+      } catch (e) {
+        return res.redirect(`${volver}?error=` + encodeURIComponent(e.message));
+      }
+      res.redirect(`${volver}?ok=` + encodeURIComponent(req.file && req.file.size ? 'Logo guardado. Ya sale en los talonarios.' : 'Colores guardados.'));
+    })(req, res, next);
   }));
 
   app.post('/empresa/:ruc/logo/borrar', envolver(async (req, res) => {
     await svc.borrarLogo(req.params.ruc);
-    res.redirect(`/empresa/${encodeURIComponent(req.params.ruc)}?ok=` + encodeURIComponent('Logo quitado.') + '#marca');
+    res.redirect(`/empresa/${encodeURIComponent(req.params.ruc)}?ok=` + encodeURIComponent('Logo quitado.'));
   }));
 
   // Correo y descuentos o adicionales fijos de un empleado; se repiten cada quincena.
@@ -261,7 +267,6 @@ function crearApp({ store, auth }) {
   app.use((err, req, res, next) => {
     console.error(err);
     const msg = err.code === 'LIMIT_FILE_SIZE' ? 'Uno de los archivos es demasiado grande (máximo 15 MB).'
-      : err.type === 'entity.too.large' ? 'La imagen del logo es demasiado grande. Prueba con una más pequeña.'
       : err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE' ? `Se pueden subir hasta ${MAX_ARCHIVOS} archivos a la vez.`
       : 'Error interno. Revisa el registro del servidor.';
     res.status(500).send(V.errorPagina(msg, req.usuario));

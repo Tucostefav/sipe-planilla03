@@ -8,7 +8,20 @@ const path = require('path');
 const { crearApp } = require('../src/app');
 const { FileStore } = require('../src/store/fileStore');
 const { crearAuth } = require('../src/auth');
+const jpeg = require('jpeg-js');
 const { crearDetalleEjemplo } = require('../scripts/crearDetalleEjemplo');
+
+// Logo de prueba: fondo blanco con una barra azul grande y un cuadro rojo.
+function logoDePrueba() {
+  const w = 120; const h = 60; const data = Buffer.alloc(w * h * 4, 255);
+  for (let y = 10; y < 50; y++) {
+    for (let x = 10; x < 110; x++) {
+      const i = (y * w + x) * 4;
+      if (x < 40) { data[i] = 240; data[i + 1] = 0; data[i + 2] = 0; } else { data[i] = 0; data[i + 1] = 0; data[i + 2] = 200; }
+    }
+  }
+  return jpeg.encode({ data, width: w, height: h }, 95).data;
+}
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'detalle_ejemplo.xls');
 
@@ -109,18 +122,23 @@ test('flujo completo por HTTP: entrar, subir, ver y descargar', async (t) => {
   assert.match(r.headers.get('content-disposition'), /Talonarios_12345-678-90_202608_2da-quincena\.xlsx/);
   await r.arrayBuffer();
 
-  // Logo sin fondo y colores de la empresa; salen en los talonarios y en el PDF.
-  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-  r = await fetch(`${base}/empresa/1234-5-67890/logo`, { method: 'POST', headers: { cookie }, redirect: 'manual', body: new URLSearchParams({ logo: png, principal: '#0000C0', secundario: '#f00000' }) });
+  // Logo en JPG con fondo blanco: el servidor le quita el fondo y toma sus colores.
+  const logo = new FormData();
+  logo.append('archivo', new Blob([logoDePrueba()]), 'logo.jpg');
+  logo.append('principal', '#0d5a4a');
+  logo.append('secundario', '#17252b');
+  r = await fetch(`${base}/empresa/1234-5-67890/logo`, { method: 'POST', body: logo, headers: { cookie }, redirect: 'manual' });
   assert.match(decodeURIComponent(r.headers.get('location')), /Logo guardado/);
-  r = await fetch(`${base}/empresa/1234-5-67890/logo`, { method: 'POST', headers: { cookie }, redirect: 'manual', body: new URLSearchParams({ logo: 'data:image/png;base64,AAAA' }) });
-  assert.match(decodeURIComponent(r.headers.get('location')), /debe ser una imagen/);
+  const malLogo = new FormData();
+  malLogo.append('archivo', new Blob([Buffer.from('no es imagen')]), 'logo.jpg');
+  r = await fetch(`${base}/empresa/1234-5-67890/logo`, { method: 'POST', body: malLogo, headers: { cookie }, redirect: 'manual' });
+  assert.match(decodeURIComponent(r.headers.get('location')), /JPG o PNG/);
   r = await get('/empresa/1234-5-67890/logo.png');
   assert.equal(r.headers.get('content-type'), 'image/png');
   await r.arrayBuffer();
   html = await (await get('/empresa/1234-5-67890/talonarios/202608')).text();
   assert.match(html, /class="t-logo"/);
-  assert.match(html, /--t-principal:#0000c0/);
+  assert.match(html, /--t-principal:#0{2}[0-9a-f]{2}[c-f][0-9a-f]/);
   r = await get('/empresa/1234-5-67890/talonarios/202608/pdf?modo=1&ver=1');
   assert.equal(r.headers.get('content-type'), 'application/pdf');
   assert.match(r.headers.get('content-disposition'), /^inline; filename="Talonarios_12345-678-90_202608_1ra-quincena\.pdf"/);
