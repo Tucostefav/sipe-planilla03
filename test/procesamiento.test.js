@@ -33,6 +33,24 @@ test('lee encabezado, totales y empleados del detalle de la CSS', async () => {
   assert.deepEqual(d.avisos, []);
 });
 
+test('lee el encabezado aunque los valores estén en otra columna', async () => {
+  // Hay detalles de la CSS con el RUC, la patronal y la tasa en la columna H en vez de la J.
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(FIXTURE);
+  const ws = wb.worksheets[0];
+  for (let r = 2; r <= 6; r++) {
+    const v = ws.getRow(r).getCell(10).value;
+    if (v === null || v === undefined) continue;
+    ws.getRow(r).getCell(8).value = v;
+    ws.getRow(r).getCell(10).value = null;
+  }
+  const d = await parseDetalleCSS(Buffer.from(await wb.xlsx.writeBuffer()));
+  assert.equal(d.empresa.ruc, '1234-5-67890');
+  assert.equal(d.empresa.patronal, '87-000-00000');
+  assert.equal(d.empresa.tasaRiesgo, 0.0364);
+  assert.equal(d.empleados.length, 4);
+});
+
 test('rechaza un archivo que no es el detalle de la CSS', async () => {
   const wb = new ExcelJS.Workbook();
   wb.addWorksheet('x').getCell('A1').value = 'otra cosa';

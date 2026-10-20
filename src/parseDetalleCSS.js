@@ -62,6 +62,16 @@ async function parseDetalleCSS(input) {
   if (!ws) throw new Error('El archivo no tiene hojas.');
 
   const txt = (r, c) => cellText(ws.getRow(r).getCell(c));
+  // Las celdas vienen combinadas y su ancho cambia según el archivo (el RUC puede estar en
+  // la columna H o en la J): el valor es la primera celda a la derecha distinta de la etiqueta.
+  const valorDe = (r, cEtiqueta) => {
+    const etiqueta = norm(txt(r, cEtiqueta));
+    for (let c = cEtiqueta + 1; c <= 20; c++) {
+      const t = txt(r, c);
+      if (t && norm(t) !== etiqueta) return t;
+    }
+    return '';
+  };
   const titulo = norm(txt(1, 2));
   if (!titulo.includes('planilla') || !titulo.includes('seguro')) {
     throw new Error('El archivo no parece un detalle de planilla de la CSS (falta el título "DESGLOSE DE REPORTE DE EMPLEADOS DE PLANILLA").');
@@ -74,6 +84,7 @@ async function parseDetalleCSS(input) {
   let cur = null;
   let seccion = 'encabezado';
   let tipoDocumento = '';
+  let colSexo = 11;
 
   for (let r = 2; r <= ws.rowCount; r++) {
     const b = txt(r, 2);
@@ -85,6 +96,8 @@ async function parseDetalleCSS(input) {
     // según el documento del empleado; se reconoce por "Apellido" en la columna D.
     if (nb === 'seguro social' && norm(d) === 'apellido') {
       tipoDocumento = norm(c);
+      colSexo = 11;
+      for (let k = 5; k <= 20; k++) if (norm(txt(r, k)) === 'sexo') { colSexo = k; break; }
       seccion = 'id';
       continue;
     }
@@ -95,7 +108,7 @@ async function parseDetalleCSS(input) {
         tipoDocumento,
         apellido: d,
         nombre: txt(r, 6),
-        sexo: txt(r, 11),
+        sexo: txt(r, colSexo),
         componentes: {},
         conceptosNoMapeados: [],
         cuotas: {},
@@ -116,7 +129,7 @@ async function parseDetalleCSS(input) {
         continue;
       }
       const e = norm(txt(r, 5));
-      const j = txt(r, 10);
+      const j = valorDe(r, 5);
       if (nb === 'razon social') empresa.razonSocial = c;
       if (nb === 'nombre comercial') empresa.nombreComercial = c;
       if (nb === 'grupo de empleados') empresa.grupoEmpleados = c;
