@@ -8,6 +8,7 @@ const { Servicio } = require('./servicio');
 const { excelInforme03, nombreArchivoInforme03 } = require('./informe03');
 const { excelPlanilla03, nombreArchivoPlanilla03 } = require('./planilla03');
 
+const MAX_ARCHIVOS = 36;
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 function crearApp({ store, auth }) {
@@ -48,14 +49,40 @@ function crearApp({ store, auth }) {
     res.send(V.inicio({ empresas, usuario: req.usuario, ...flash(req) }));
   }));
 
-  app.post('/cargar', subir.single('archivo'), envolver(async (req, res) => {
-    if (!req.file) return res.redirect('/?error=' + encodeURIComponent('Selecciona el archivo del detalle de planilla.'));
-    try {
-      const { detalle, reemplazo } = await svc.cargarDetalle(req.file.buffer, req.file.originalname);
-      return res.redirect(`/carga/${encodeURIComponent(detalle.empresa.ruc)}/${detalle.periodo}${reemplazo ? '?reemplazo=1' : ''}`);
-    } catch (e) {
-      return res.redirect('/?error=' + encodeURIComponent(e.message));
+  // Acepta uno o varios detalles. Con uno solo va directo a su revisión; con varios
+  // muestra un resumen por archivo. Cada mes queda guardado y alimenta la Planilla 03.
+  app.post('/cargar', subir.array('archivo', MAX_ARCHIVOS), envolver(async (req, res) => {
+    const archivos = req.files || [];
+    if (!archivos.length) return res.redirect('/?error=' + encodeURIComponent('Selecciona el archivo del detalle de planilla.'));
+    if (archivos.length === 1) {
+      try {
+        const { detalle, reemplazo } = await svc.cargarDetalle(archivos[0].buffer, archivos[0].originalname);
+        return res.redirect(`/carga/${encodeURIComponent(detalle.empresa.ruc)}/${detalle.periodo}${reemplazo ? '?reemplazo=1' : ''}`);
+      } catch (e) {
+        return res.redirect('/?error=' + encodeURIComponent(e.message));
+      }
     }
+    const resultados = [];
+    for (const f of archivos) {
+      try {
+        const { detalle, reemplazo } = await svc.cargarDetalle(f.buffer, f.originalname);
+        const inf = await svc.informe03(detalle.empresa.ruc, detalle.periodo);
+        resultados.push({ archivo: f.originalname, empresa: inf.empresa, detalle, reemplazo, cuadres: inf.cuadres });
+      } catch (e) {
+        resultados.push({ archivo: f.originalname, error: e.message });
+      }
+    }
+    // Meses que ya tiene cada empresa (los de antes más los de esta carga), para la tira.
+    const periodos = new Map();
+    for (const r of resultados) {
+      if (r.error || periodos.has(r.empresa.ruc)) continue;
+      periodos.set(r.empresa.ruc, (await svc.listarDetalles(r.empresa.ruc)).map((d) => String(d.periodo)));
+    }
+    for (const r of resultados) if (!r.error) r.empresa.periodos = periodos.get(r.empresa.ruc);
+    resultados.sort((a, b) => (a.error ? 1 : 0) - (b.error ? 1 : 0)
+      || String(a.empresa && a.empresa.razonSocial).localeCompare(String(b.empresa && b.empresa.razonSocial))
+      || String(a.detalle && a.detalle.periodo).localeCompare(String(b.detalle && b.detalle.periodo)));
+    return res.send(V.resultadoLote({ resultados, usuario: req.usuario }));
   }));
 
   app.get('/carga/:ruc/:periodo', envolver(async (req, res) => {
@@ -158,7 +185,9 @@ function crearApp({ store, auth }) {
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
     console.error(err);
-    const msg = err.code === 'LIMIT_FILE_SIZE' ? 'El archivo es demasiado grande.' : 'Error interno. Revisa el registro del servidor.';
+    const msg = err.code === 'LIMIT_FILE_SIZE' ? 'Uno de los archivos es demasiado grande (máximo 15 MB).'
+      : err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE' ? `Se pueden subir hasta ${MAX_ARCHIVOS} archivos a la vez.`
+      : 'Error interno. Revisa el registro del servidor.';
     res.status(500).send(V.errorPagina(msg, req.usuario));
   });
 

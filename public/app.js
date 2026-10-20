@@ -6,10 +6,12 @@ document.querySelectorAll('[data-subir]').forEach((form) => {
   const input = form.querySelector('input[type="file"]');
   const nombre = form.querySelector('[data-nombre]');
   const boton = form.querySelector('[data-procesar]');
+  const ayuda = form.querySelector('[data-ayuda]');
   const mostrar = () => {
-    const f = input.files && input.files[0];
-    if (!f) return;
-    nombre.textContent = f.name;
+    const fs = [...(input.files || [])];
+    if (!fs.length) return;
+    nombre.textContent = fs.length === 1 ? fs[0].name : `${fs.length} archivos listos para procesar`;
+    if (ayuda && fs.length > 1) ayuda.textContent = fs.map((f) => f.name).join(' · ');
     zona.classList.add('lista');
   };
   input.addEventListener('change', mostrar);

@@ -144,6 +144,8 @@ button { font: inherit; cursor: pointer; }
 .titulo-seccion { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 32px 0 12px; }
 .titulo-seccion h2 { margin: 0; }
 .titulo-seccion .boton, .titulo-seccion .filtro, .titulo-seccion .buscar { margin-left: auto; }
+.titulo-seccion .boton + .boton { margin-left: 0; }
+.panel > .titulo-seccion:first-child { margin-top: 0; }
 .contador { font-family: var(--f-mono); font-size: .8rem; background: var(--cabecera); color: var(--tinta-suave); padding: 2px 9px; border-radius: 999px; }
 .filtro { width: min(320px, 100%); }
 .buscar { margin: 0; }

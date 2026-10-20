@@ -8,6 +8,7 @@ const path = require('path');
 const { crearApp } = require('../src/app');
 const { FileStore } = require('../src/store/fileStore');
 const { crearAuth } = require('../src/auth');
+const { crearDetalleEjemplo } = require('../scripts/crearDetalleEjemplo');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'detalle_ejemplo.xls');
 
@@ -35,8 +36,27 @@ test('flujo completo por HTTP: entrar, subir, ver y descargar', async (t) => {
   assert.equal(r.status, 302);
   assert.equal(r.headers.get('location'), '/carga/1234-5-67890/202608');
 
-  r = await get('/carga/1234-5-67890/202608');
+  // Varios archivos a la vez: cada mes se guarda y alimenta la Planilla 03.
+  const julio = await crearDetalleEjemplo(path.join(os.tmpdir(), `detalle_julio_${process.pid}.xlsx`), 'Julio 2026');
+  const lote = new FormData();
+  lote.append('archivo', new Blob([fs.readFileSync(julio)]), 'julio.xlsx');
+  lote.append('archivo', new Blob([fs.readFileSync(FIXTURE)]), 'agosto.xls');
+  lote.append('archivo', new Blob([Buffer.from('no es excel')]), 'otro.txt');
+  r = await fetch(`${base}/cargar`, { method: 'POST', body: lote, headers: { cookie }, redirect: 'manual' });
+  assert.equal(r.status, 200);
   let html = await r.text();
+  assert.match(html, /2 meses procesados/);
+  assert.match(html, /informe03\/202607\/excel/);
+  assert.match(html, /informe03\/202608\/excel/);
+  assert.match(html, /planilla03\/2026\/excel/);
+  assert.match(html, /otro\.txt/);
+  r = await get('/empresa/1234-5-67890/planilla03/2026');
+  html = await r.text();
+  assert.match(html, /JULIO/);
+  assert.match(html, /AGOSTO/);
+
+  r = await get('/carga/1234-5-67890/202608');
+  html = await r.text();
   assert.match(html, /Empleados por completar \(4\)/);
   assert.match(html, /Cuadra/);
 

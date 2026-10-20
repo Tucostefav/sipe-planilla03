@@ -49,12 +49,12 @@ ${configurado ? '' : '<p class="aviso-error">Falta configurar APP_CLAVE en las v
 function formSubir({ compacto = false } = {}) {
   return `<form class="subir${compacto ? ' compacto' : ''}" method="post" action="/cargar" enctype="multipart/form-data" data-subir>
 <label class="zona">
-<input type="file" name="archivo" accept=".xls,.xlsx" required>
+<input type="file" name="archivo" accept=".xls,.xlsx" multiple required>
 <svg class="zona-icono" viewBox="0 0 40 48" aria-hidden="true"><path d="M4 2h22l10 10v34H4z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M26 2v10h10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M11 24h18M11 30h18M11 36h12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
-<span class="zona-texto"><strong data-nombre>Arrastra aquí el detalle de planilla</strong>
-<span>o haz clic para elegirlo · .xls o .xlsx de la CSS, hasta 15 MB</span></span>
+<span class="zona-texto"><strong data-nombre>Arrastra aquí uno o varios detalles de planilla</strong>
+<span data-ayuda>o haz clic para elegirlos · .xls o .xlsx de la CSS, hasta 36 archivos de 15 MB</span></span>
 </label>
-<button class="boton" data-procesar>Procesar detalle</button>
+<button class="boton" data-procesar>Procesar</button>
 </form>`;
 }
 
@@ -84,9 +84,9 @@ ${e.idPlanilla ? '' : `<p class="chip ambar"><a href="${base}">Falta ID_PLANILLA
   }).join('');
   return layout('Empresas', `
 <section class="entrada">
-<div class="entrada-texto"><p class="ceja">Paso único</p>
+<div class="entrada-texto"><p class="ceja">Cargar planilla</p>
 <h1>Sube el detalle de planilla de la CSS</h1>
-<p class="lead">El sistema reconoce la empresa por el RUC y el mes por el «Mes cuota». Con eso arma el Informe 03 para la DGI y suma el mes a la Planilla 03 del año. Si subes otra vez el mismo mes, se reemplaza.</p></div>
+<p class="lead">Puedes subir un mes o todos los del año de una vez. El sistema reconoce la empresa por el RUC y el mes por el «Mes cuota»: cada mes arma su Informe 03 para la DGI y se suma a la Planilla 03 del año. Si subes otra vez el mismo mes, se reemplaza.</p></div>
 ${formSubir()}
 </section>
 <section>
@@ -160,6 +160,56 @@ ${detalle.empleados.map((e) => `<tr><td class="mono">${h(e.cedula)}${e.tipoDocum
 </tbody></table></div>`, { usuario, seccion: 'empresas' });
 }
 
+// Resumen de una carga de varios archivos: un renglón por archivo, con su Informe 03 para
+// descargar por separado (se presenta mes a mes) y la Planilla 03 de cada empresa y año.
+function resultadoLote({ resultados, usuario }) {
+  const ok = resultados.filter((r) => !r.error);
+  const fallidos = resultados.filter((r) => r.error);
+  const planillas = new Map();
+  for (const r of ok) {
+    const anio = anioDe(r.detalle.periodo);
+    const clave = `${r.empresa.ruc}|${anio}`;
+    if (!planillas.has(clave)) planillas.set(clave, { empresa: r.empresa, anio, periodos: [] });
+    planillas.get(clave).periodos.push(r.detalle.periodo);
+  }
+  const noCuadran = ok.filter((r) => !r.cuadres.every((c) => c.ok)).length;
+  return layout('Carga de varios meses', `
+<p class="migas"><a href="/">Empresas</a></p>
+<section class="cabecera-empresa">
+<div><p class="ceja">Carga de varios archivos</p>
+<h1>${plural(ok.length, 'mes procesado', 'meses procesados')}</h1>
+<p class="subtitulo">${plural(resultados.length, 'archivo subido', 'archivos subidos')}${fallidos.length ? ` · ${plural(fallidos.length, 'no se pudo leer', 'no se pudieron leer')}` : ''}${noCuadran ? ` · ${plural(noCuadran, 'mes no cuadra', 'meses no cuadran')}` : ''}</p></div>
+</section>
+${[...planillas.values()].map((p) => {
+    const base = `/empresa/${enc(p.empresa.ruc)}`;
+    return `<section class="anio panel">
+<div class="titulo-seccion"><h2>${h(p.empresa.razonSocial)} · Planilla 03 ${p.anio}</h2>
+<a class="boton" href="${base}/planilla03/${p.anio}/excel">Descargar Planilla 03 ${p.anio}</a>
+<a class="boton secundario" href="${base}/planilla03/${p.anio}">Ver</a></div>
+<p class="nota">La tira muestra todos los meses que ya tiene la Planilla 03; los de esta carga se suman a los que ya estaban.</p>
+${tiraMeses(p.anio, p.empresa.periodos || p.periodos, (x) => `${base}/informe03/${x}`, { grande: true })}
+</section>`;
+  }).join('')}
+<h2>Informes 03 para la DGI, uno por mes</h2>
+<div class="scroll"><table><thead><tr><th>Empresa</th><th>Mes</th><th class="n">Empleados</th><th>Cuadre con la CSS</th><th>Archivo subido</th><th></th></tr></thead><tbody>
+${ok.map((r) => {
+    const base = `/empresa/${enc(r.empresa.ruc)}`;
+    const cuadra = r.cuadres.every((c) => c.ok);
+    return `<tr><td>${h(r.empresa.razonSocial)}</td><td>${h(nombreMes(r.detalle.periodo))}${r.reemplazo ? ' <span class="chip">reemplazado</span>' : ''}</td>
+<td class="n">${r.detalle.empleados.length}</td><td>${cuadra ? '<span class="chip verde">Cuadra</span>' : '<span class="chip rojo">No cuadra</span>'}</td>
+<td class="mono suave">${h(r.archivo)}</td>
+<td class="acciones"><a class="boton pequeno" href="${base}/informe03/${r.detalle.periodo}/excel">Descargar Informe 03</a>
+<a href="/carga/${enc(r.empresa.ruc)}/${r.detalle.periodo}">Revisar</a></td></tr>`;
+  }).join('') || '<tr><td colspan="6">Ningún archivo se pudo procesar.</td></tr>'}
+</tbody></table></div>
+${fallidos.length ? `<h2>Archivos que no se procesaron</h2>
+<div class="scroll"><table><thead><tr><th>Archivo</th><th>Motivo</th></tr></thead><tbody>
+${fallidos.map((r) => `<tr><td class="mono">${h(r.archivo)}</td><td class="peligro">${h(r.error)}</td></tr>`).join('')}
+</tbody></table></div>` : ''}
+<h2>Subir más meses</h2>
+${formSubir({ compacto: true })}`, { usuario, seccion: 'empresas' });
+}
+
 function empresaPagina({ empresa, detalles, usuario, aviso }) {
   const base = `/empresa/${enc(empresa.ruc)}`;
   const anios = [...new Set(detalles.map((d) => anioDe(d.periodo)))];
@@ -186,7 +236,7 @@ ${detalles.map((d) => `<tr><td>${h(nombreMes(d.periodo))}</td><td class="n">${d.
 <a href="/carga/${enc(empresa.ruc)}/${d.periodo}">Revisar</a>
 <form method="post" action="${base}/borrar/${d.periodo}" onsubmit="return confirm('¿Borrar ${h(nombreMes(d.periodo))}? Se quita también de la Planilla 03.')"><button class="enlace peligro">Borrar</button></form></td></tr>`).join('')}
 </tbody></table></div>` : ''}
-<h2>Subir otro mes</h2>
+<h2>Subir más meses</h2>
 ${formSubir({ compacto: true })}`, { usuario, aviso, seccion: 'empresas' });
 }
 
@@ -298,4 +348,4 @@ function errorPagina(mensaje, usuario) {
   return layout('Error', `<section class="panel"><h1>No se pudo completar</h1><p class="aviso-error">${h(mensaje)}</p><p><a class="boton secundario" href="/">Volver a empresas</a></p></section>`, { usuario });
 }
 
-module.exports = { login, inicio, resultadoCarga, empresaPagina, informe03Pagina, planilla03Pagina, empleadosPagina, errorPagina };
+module.exports = { login, inicio, resultadoCarga, resultadoLote, empresaPagina, informe03Pagina, planilla03Pagina, empleadosPagina, errorPagina };
