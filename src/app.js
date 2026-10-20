@@ -5,6 +5,7 @@ const express = require('express');
 const multer = require('multer');
 const V = require('./views');
 const { Servicio } = require('./servicio');
+const { rucDGI } = require('./util');
 const { excelInforme03, nombreArchivoInforme03 } = require('./informe03');
 const { excelPlanilla03, nombreArchivoPlanilla03 } = require('./planilla03');
 
@@ -103,9 +104,18 @@ function crearApp({ store, auth }) {
   }));
 
   app.post('/empresa/:ruc/config', envolver(async (req, res) => {
-    const id = String(req.body.idPlanilla || '').trim();
-    await svc.guardarEmpresa(req.params.ruc, { idPlanilla: id });
-    res.redirect(`/empresa/${encodeURIComponent(req.params.ruc)}?ok=` + encodeURIComponent('ID_PLANILLA guardado.'));
+    const volver = `/empresa/${encodeURIComponent(req.params.ruc)}`;
+    const cambios = { idPlanilla: String(req.body.idPlanilla || '').trim() };
+    if (req.body.rucDGI !== undefined) {
+      const r = String(req.body.rucDGI).trim().toUpperCase().replace(/\s+/g, '');
+      // Debe ser el mismo RUC de la CSS, solo que con guiones.
+      if (r && r.replace(/-/g, '') !== String(req.params.ruc).replace(/-/g, '').toUpperCase()) {
+        return res.redirect(`${volver}?error=` + encodeURIComponent(`El RUC con guiones debe tener los mismos dígitos que el de la CSS (${req.params.ruc}).`));
+      }
+      cambios.rucDGI = r === req.params.ruc ? '' : r;
+    }
+    await svc.guardarEmpresa(req.params.ruc, cambios);
+    res.redirect(`${volver}?ok=` + encodeURIComponent('Datos de la empresa guardados.'));
   }));
 
   app.post('/empresa/:ruc/borrar/:periodo', envolver(async (req, res) => {
@@ -122,8 +132,8 @@ function crearApp({ store, auth }) {
   app.get('/empresa/:ruc/informe03/:periodo/excel', envolver(async (req, res) => {
     const inf = await svc.informe03(req.params.ruc, req.params.periodo);
     if (!inf) return res.sendStatus(404);
-    const buf = await excelInforme03({ ruc: inf.empresa.ruc, periodo: inf.detalle.periodo, filas: inf.filas });
-    res.attachment(nombreArchivoInforme03(inf.empresa.ruc, inf.detalle.periodo)).type(XLSX_MIME).send(Buffer.from(buf));
+    const buf = await excelInforme03({ ruc: rucDGI(inf.empresa), periodo: inf.detalle.periodo, filas: inf.filas });
+    res.attachment(nombreArchivoInforme03(rucDGI(inf.empresa), inf.detalle.periodo)).type(XLSX_MIME).send(Buffer.from(buf));
   }));
 
   app.get('/empresa/:ruc/planilla03/:anio', envolver(async (req, res) => {

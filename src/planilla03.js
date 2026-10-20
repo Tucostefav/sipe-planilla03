@@ -1,7 +1,7 @@
 'use strict';
 
 const ExcelJS = require('exceljs');
-const { round2, compararCedula, MESES } = require('./util');
+const { round2, compararCedula, MESES, rucDGI } = require('./util');
 
 const MESES_MAYUS = MESES.map((m) => m.toUpperCase());
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -151,7 +151,7 @@ async function excelPlanilla03({ empresa, planilla }) {
   ws.getCell('A2').value = 'NO. PATRONAL ';
   ws.getCell('C2').value = empresa.patronal || '';
   ws.getCell('A3').value = 'RUC';
-  ws.getCell('C3').value = empresa.ruc;
+  ws.getCell('C3').value = rucDGI(empresa);
 
   const h = ws.getRow(5);
   const setH = (c, v) => { const cell = h.getCell(c); cell.value = v; cell.style = encab; };
