@@ -54,3 +54,87 @@ document.querySelectorAll('[data-filtro-tarjetas]').forEach((input) => {
     tarjetas.forEach((t, i) => { t.hidden = !!q && !textos[i].includes(q); });
   });
 });
+
+// Logo de la empresa: se le quita el fondo blanco en el navegador (queda transparente),
+// se recorta a su contenido y se sacan sus dos colores principales para los talonarios.
+document.querySelectorAll('[data-logo]').forEach((form) => {
+  const archivo = form.querySelector('input[type="file"]');
+  const dato = form.querySelector('input[name="logo"]');
+  const vista = form.querySelector('[data-logo-vista]');
+  const colores = [...form.querySelectorAll('input[type="color"]')];
+  const boton = form.querySelector('button');
+  const hex = (c) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+
+  archivo.addEventListener('change', () => {
+    const f = archivo.files && archivo.files[0];
+    if (!f) return;
+    const img = new Image();
+    img.onload = () => {
+      const escala = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const w = Math.round(img.width * escala);
+      const h = Math.round(img.height * escala);
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      const cx = cv.getContext('2d');
+      cx.drawImage(img, 0, 0, w, h);
+      const d = cx.getImageData(0, 0, w, h);
+      const p = d.data;
+      const filas = new Uint32Array(h);
+      const cols = new Uint32Array(w);
+      const grupos = new Map();
+      for (let i = 0; i < p.length; i += 4) {
+        const [r, g, b] = [p[i], p[i + 1], p[i + 2]];
+        const min = Math.min(r, g, b);
+        // Casi blanco -> transparente; el borde se suaviza para que no quede un halo blanco.
+        let a = min >= 240 ? 0 : min <= 180 ? 255 : Math.round(((240 - min) / 60) * 255);
+        a = Math.min(a, p[i + 3]);
+        if (a > 0 && a < 255) {
+          const f2 = a / 255;
+          for (let k = 0; k < 3; k++) p[i + k] = Math.max(0, Math.min(255, Math.round((p[i + k] - (1 - f2) * 255) / f2)));
+        }
+        p[i + 3] = a;
+        if (a > 200) {
+          const px = (i / 4) % w;
+          const py = Math.floor(i / 4 / w);
+          filas[py]++; cols[px]++;
+          const max = Math.max(p[i], p[i + 1], p[i + 2]);
+          const sat = max ? (max - Math.min(p[i], p[i + 1], p[i + 2])) / max : 0;
+          if (sat > 0.45 && max > 60) {
+            // Agrupa por tono (12 grupos) para encontrar los colores de la marca.
+            const [R, G, B] = [p[i] / max, p[i + 1] / max, p[i + 2] / max];
+            const tono = Math.round(((Math.atan2(Math.sqrt(3) * (G - B), 2 * R - G - B) * 180 / Math.PI + 360) % 360) / 30) % 12;
+            const gr = grupos.get(tono) || { n: 0, r: 0, g: 0, b: 0 };
+            gr.n++; gr.r += p[i]; gr.g += p[i + 1]; gr.b += p[i + 2];
+            grupos.set(tono, gr);
+          }
+        }
+      }
+      cx.putImageData(d, 0, 0);
+      // Recorte: ignora puntitos sueltos (filas o columnas con muy pocos píxeles).
+      const minimo = 3;
+      const desde = (arr) => arr.findIndex((v) => v >= minimo);
+      const hasta = (arr) => arr.length - 1 - [...arr].reverse().findIndex((v) => v >= minimo);
+      const x0 = desde(cols); const x1 = hasta(cols); const y0 = desde(filas); const y1 = hasta(filas);
+      if (x0 < 0 || y0 < 0) { vista.hidden = false; vista.textContent = 'No encontré el logo: la imagen parece estar en blanco.'; return; }
+      const m = Math.round(Math.max(w, h) * 0.01);
+      const cw = Math.min(w, x1 + m + 1) - Math.max(0, x0 - m);
+      const ch = Math.min(h, y1 + m + 1) - Math.max(0, y0 - m);
+      const fin = Math.min(1, 900 / Math.max(cw, ch));
+      const out = document.createElement('canvas');
+      out.width = Math.round(cw * fin); out.height = Math.round(ch * fin);
+      out.getContext('2d').drawImage(cv, Math.max(0, x0 - m), Math.max(0, y0 - m), cw, ch, 0, 0, out.width, out.height);
+      dato.value = out.toDataURL('image/png');
+      const top = [...grupos.values()].sort((a, b) => b.n - a.n).slice(0, 2).map((gr) => hex([gr.r / gr.n, gr.g / gr.n, gr.b / gr.n]));
+      top.forEach((c, i) => { if (colores[i]) colores[i].value = c; });
+      vista.innerHTML = '';
+      const muestra = new Image();
+      muestra.src = dato.value;
+      muestra.alt = 'Logo sin fondo';
+      vista.appendChild(muestra);
+      vista.hidden = false;
+      if (boton) boton.textContent = 'Guardar logo y colores';
+    };
+    img.onerror = () => { vista.hidden = false; vista.textContent = 'No se pudo abrir esa imagen. Usa un JPG o PNG.'; };
+    img.src = URL.createObjectURL(f);
+  });
+});

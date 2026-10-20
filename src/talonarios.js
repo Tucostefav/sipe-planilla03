@@ -124,119 +124,284 @@ function nombreEmpresaTalonario(empresa) {
   return String(empresa.nombreTalonario || empresa.nombreComercial || empresa.razonSocial || '').toUpperCase();
 }
 
-function nombreArchivoTalonarios(ruc, periodo, modo) {
-  return `Talonarios_${ruc}_${periodo}_${MODOS[modoValido(modo)].archivo}.xlsx`;
+function nombreArchivoTalonarios(ruc, periodo, modo, ext = 'xlsx') {
+  return `Talonarios_${ruc}_${periodo}_${MODOS[modoValido(modo)].archivo}.${ext}`;
 }
 
-/** Excel con un talonario por empleado, uno debajo del otro, como el modelo. */
-async function excelTalonarios({ empresa, resultado }) {
+// Colores de la marca de la empresa (los toma del logo); si no tiene, verde y tinta de la app.
+function coloresTalonario(empresa) {
+  const c = (empresa && empresa.colores) || {};
+  return { principal: c.principal || '#0d5a4a', secundario: c.secundario || '#17252b' };
+}
+
+// Mezcla un color con blanco: aclarar('#0000c0', 0.9) -> el tono muy claro para los fondos.
+function aclarar(hex, cuanto) {
+  const n = parseInt(hex.slice(1), 16);
+  return '#' + [n >> 16, (n >> 8) & 255, n & 255].map((v) => Math.round(v + (255 - v) * cuanto).toString(16).padStart(2, '0')).join('');
+}
+
+const argb = (hex) => 'FF' + hex.slice(1).toUpperCase();
+
+// Ancho y alto de un PNG (cabecera IHDR).
+function medidasPng(png) {
+  return { ancho: png.readUInt32BE(16), alto: png.readUInt32BE(20) };
+}
+
+/** Excel con un talonario por empleado, uno debajo del otro, con el logo y los colores de la empresa. */
+async function excelTalonarios({ empresa, resultado, logo }) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Talonarios', {
-    pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } },
+    views: [{ showGridLines: false }],
+    pageSetup: { paperSize: 1, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true,
+      margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 } },
   });
-  ws.columns = [{ width: 33.43 }, { width: 25.43 }, { width: 5 }, { width: 11.43 }, { width: 14.43 }];
+  ws.columns = [{ width: 34 }, { width: 18 }, { width: 4 }, { width: 14 }, { width: 16 }];
+  const { principal, secundario } = coloresTalonario(empresa);
+  const claro = argb(aclarar(principal, 0.88));
   const NUM = '#,##0.00';
   const BALBOAS = '_("B/." * #,##0.00_);_("B/." * (#,##0.00);_("B/." * "-"??_);_(@_)';
-  const medio = { style: 'medium' };
+  const fino = { style: 'thin', color: { argb: argb(aclarar(principal, 0.55)) } };
+  const marco = { style: 'medium', color: { argb: argb(principal) } };
   const nombreEmpresa = nombreEmpresaTalonario(empresa);
+  const idLogo = logo ? wb.addImage({ buffer: logo, extension: 'png' }) : null;
+  const medidas = logo ? medidasPng(logo) : null;
+  const ingresosMas = resultado.modo === 'mes' ? 'SUB-TOTAL MES' : 'SUB-TOTAL QUINCENA';
   let r = 1;
 
   for (const tal of resultado.talonarios) {
     const inicio = r;
-    const centrada = (valor, { negrita = false } = {}) => {
-      ws.mergeCells(r, 1, r, 5);
-      const c = ws.getCell(r, 1);
-      c.value = valor;
-      c.alignment = { horizontal: 'center' };
-      if (negrita) c.font = { bold: true };
-      r++;
+    const fila = (alto) => { if (alto) ws.getRow(r).height = alto; return r++; };
+    const unir = (f, c1, c2) => ws.mergeCells(f, c1, f, c2);
+
+    // Encabezado: logo a la izquierda y el nombre de la empresa a la derecha.
+    const fLogo = fila(52);
+    if (idLogo !== null) {
+      const alto = 46;
+      const ancho = Math.min(230, (medidas.ancho / medidas.alto) * alto);
+      ws.addImage(idLogo, { tl: { col: 0.15, row: fLogo - 1 + 0.08 }, ext: { width: ancho * 1.333, height: alto * 1.333 }, editAs: 'oneCell' });
+      unir(fLogo, 2, 5);
+      Object.assign(ws.getCell(fLogo, 2), { value: nombreEmpresa, font: { bold: true, size: 14, color: { argb: argb(principal) } }, alignment: { horizontal: 'right', vertical: 'middle' } });
+    } else {
+      unir(fLogo, 1, 5);
+      Object.assign(ws.getCell(fLogo, 1), { value: nombreEmpresa, font: { bold: true, size: 14, color: { argb: argb(principal) } }, alignment: { horizontal: 'center', vertical: 'middle' } });
+    }
+    const fTitulo = fila(20);
+    unir(fTitulo, 1, 5);
+    Object.assign(ws.getCell(fTitulo, 1), {
+      value: `TALONARIO DE PAGO  ·  ${resultado.titulo.toUpperCase()}`,
+      font: { bold: true, size: 10, color: { argb: 'FFFFFFFF' } }, alignment: { horizontal: 'center', vertical: 'middle' },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(principal) } },
+    });
+    const fRaya = fila(4);
+    for (let c = 1; c <= 5; c++) ws.getCell(fRaya, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(secundario) } };
+
+    const fNombre = fila(20);
+    unir(fNombre, 1, 3);
+    unir(fNombre, 4, 5);
+    Object.assign(ws.getCell(fNombre, 1), { value: tal.nombre, font: { bold: true, size: 12 }, alignment: { vertical: 'middle' } });
+    Object.assign(ws.getCell(fNombre, 4), { value: `CÉDULA ${tal.cedula}`, font: { size: 10, color: { argb: 'FF52646B' } }, alignment: { horizontal: 'right', vertical: 'middle' } });
+    if (tal.correo) {
+      const f = fila();
+      unir(f, 1, 5);
+      Object.assign(ws.getCell(f, 1), { value: { text: tal.correo, hyperlink: `mailto:${tal.correo}` }, font: { size: 9, color: { argb: argb(principal) }, underline: false } });
+    }
+
+    const seccion = (texto) => {
+      const f = fila(17);
+      for (let c = 1; c <= 5; c++) ws.getCell(f, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: claro } };
+      Object.assign(ws.getCell(f, 1), { value: texto, font: { bold: true, size: 9, color: { argb: argb(principal) } }, alignment: { vertical: 'middle' } });
+      return f;
     };
-    centrada(nombreEmpresa, { negrita: true });
-    centrada('TALONARIO  DE PAGO', { negrita: true });
-    centrada(tal.nombre);
-    if (tal.correo) centrada({ text: tal.correo, hyperlink: `mailto:${tal.correo}` });
-    centrada(`CED. ${tal.cedula}`);
+    const linea = (concepto, monto, { col = 4, negrita = false, sangria = true } = {}) => {
+      const f = fila();
+      Object.assign(ws.getCell(f, 1), { value: concepto, alignment: { indent: sangria ? 1 : 0 }, font: negrita ? { bold: true } : undefined });
+      const c = ws.getCell(f, col);
+      c.value = monto;
+      c.numFmt = NUM;
+      if (negrita) c.font = { bold: true };
+      return f;
+    };
 
-    const ingresoIni = r;
-    for (const i of tal.ingresos) {
-      ws.getCell(r, 1).value = i.concepto;
-      ws.getCell(r, 4).value = i.monto || null;
-      r++;
-    }
-    const filaSub = r;
-    ws.getCell(r, 1).value = resultado.modo === 'mes' ? 'SUB-TOTAL MES' : 'SUB-TOTAL QUINCENA';
-    ws.getCell(r, 5).value = { formula: `SUM(D${ingresoIni}:D${r - 1})`, result: tal.subtotal };
-    ws.getCell(r, 5).border = { top: { style: 'thin' }, right: medio };
-    r++;
-    const filaXiii = r;
-    ws.getCell(r, 1).value = 'Mas:  XIII MES';
-    ws.getCell(r, 5).value = tal.xiii || null;
-    r++;
-    let filaGr = null;
-    if (tal.gr) {
-      filaGr = r;
-      ws.getCell(r, 1).value = 'Mas:  GASTO DE REPRESENTACION';
-      ws.getCell(r, 5).value = tal.gr;
-      r++;
-    }
-    ws.getCell(r, 1).value = 'MENOS:';
-    r++;
+    seccion('INGRESOS');
+    const ingIni = r;
+    for (const i of tal.ingresos) linea(i.concepto, i.monto || null);
+    const fSub = linea(ingresosMas, { formula: `SUM(D${ingIni}:D${r - 1})`, result: tal.subtotal }, { col: 5, negrita: true, sangria: false });
+    ws.getCell(fSub, 5).border = { top: fino };
+    const fXiii = linea('Más: XIII mes', tal.xiii || null, { col: 5 });
+    const fGr = tal.gr ? linea('Más: gasto de representación', tal.gr, { col: 5 }) : null;
+
+    seccion('DEDUCCIONES');
     const dedIni = r;
-    for (const d of tal.deducciones) {
-      ws.getCell(r, 2).value = d.concepto;
-      ws.getCell(r, 4).value = d.monto || null;
-      r++;
-    }
-    const filaDed = r;
-    ws.getCell(r, 4).value = { formula: `SUM(D${dedIni}:D${r - 1})`, result: tal.totalDeducciones };
-    ws.getCell(r, 4).border = { top: { style: 'thin' } };
-    r++;
-    const adicIni = r;
-    for (const a of tal.adicionales) {
-      ws.getCell(r, 1).value = `MAS: ${a.concepto}`;
-      ws.getCell(r, 4).value = a.monto;
-      r++;
-    }
-    const adicFin = r - 1;
-    r++;
-    const filaNeta = r;
-    const sumas = [`E${filaSub}`, `E${filaXiii}`, filaGr ? `E${filaGr}` : null].filter(Boolean).join('+');
-    const adic = tal.adicionales.length ? `+SUM(D${adicIni}:D${adicFin})` : '';
-    ws.getCell(r, 1).value = resultado.etiquetaNeto;
-    ws.getCell(r, 1).font = { bold: true };
-    ws.getCell(r, 5).value = { formula: `${sumas}-D${filaDed}${adic}`, result: tal.neto };
-    ws.getCell(r, 5).font = { bold: true };
-    ws.getCell(r, 5).numFmt = BALBOAS;
-    ws.getCell(r, 5).border = { top: { style: 'thin' }, bottom: { style: 'double' }, right: medio };
-    r += 2;
-    ws.getCell(r, 1).value = 'RECIBI CONFORME:';
-    ws.mergeCells(r, 2, r, 4);
-    ws.getCell(r, 2).border = { bottom: { style: 'thin' } };
-    r++;
-    ws.getCell(r, 1).value = 'CEDULA:';
-    ws.getCell(r, 1).alignment = { horizontal: 'right' };
-    ws.mergeCells(r, 2, r, 4);
-    ws.getCell(r, 2).value = tal.cedula;
-    ws.getCell(r, 2).alignment = { horizontal: 'center' };
-    const fin = r;
+    for (const d of tal.deducciones) linea(d.concepto, d.monto || null);
+    const fDed = linea('TOTAL DEDUCCIONES', { formula: `SUM(D${dedIni}:D${r - 1})`, result: tal.totalDeducciones }, { col: 5, negrita: true, sangria: false });
+    ws.getCell(fDed, 5).border = { top: fino };
 
-    // Marco del talonario y formato de montos.
+    let fAdic = null;
+    if (tal.adicionales.length) {
+      seccion('ADICIONALES');
+      const adIni = r;
+      for (const a of tal.adicionales) linea(a.concepto, a.monto);
+      fAdic = linea('TOTAL ADICIONALES', { formula: `SUM(D${adIni}:D${r - 1})`, result: tal.totalAdicionales }, { col: 5, negrita: true, sangria: false });
+      ws.getCell(fAdic, 5).border = { top: fino };
+    }
+
+    fila(6);
+    const fNeta = fila(24);
+    unir(fNeta, 1, 4);
+    const sumas = [`E${fSub}`, `E${fXiii}`, fGr ? `E${fGr}` : null].filter(Boolean).join('+');
+    const relleno = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(principal) } };
+    Object.assign(ws.getCell(fNeta, 1), { value: resultado.etiquetaNeto, fill: relleno, font: { bold: true, size: 12, color: { argb: 'FFFFFFFF' } }, alignment: { vertical: 'middle', indent: 1 } });
+    Object.assign(ws.getCell(fNeta, 5), {
+      value: { formula: `${sumas}-E${fDed}${fAdic ? `+E${fAdic}` : ''}`, result: tal.neto },
+      numFmt: BALBOAS, fill: relleno, font: { bold: true, size: 12, color: { argb: 'FFFFFFFF' } }, alignment: { vertical: 'middle' },
+    });
+
+    fila(26);
+    const fFirma = fila(18);
+    Object.assign(ws.getCell(fFirma, 1), { value: 'Recibí conforme:', font: { size: 10, color: { argb: 'FF52646B' } }, alignment: { horizontal: 'right', vertical: 'bottom' } });
+    unir(fFirma, 2, 5);
+    ws.getCell(fFirma, 2).border = { bottom: { style: 'thin' } };
+    const fCed = fila(18);
+    Object.assign(ws.getCell(fCed, 1), { value: 'Cédula:', font: { size: 10, color: { argb: 'FF52646B' } }, alignment: { horizontal: 'right', vertical: 'bottom' } });
+    unir(fCed, 2, 5);
+    Object.assign(ws.getCell(fCed, 2), { value: tal.cedula, alignment: { horizontal: 'left', vertical: 'bottom', indent: 1 } });
+    const fin = fila(6);
+
+    // Marco del talonario en el color de la marca.
     for (let i = inicio; i <= fin; i++) {
-      for (const col of [4, 5]) if (i !== filaNeta) ws.getCell(i, col).numFmt = NUM;
-      const a = ws.getCell(i, 1);
-      const e = ws.getCell(i, 5);
-      a.border = { ...a.border, left: medio, ...(i === inicio ? { top: medio } : {}), ...(i === fin ? { bottom: medio } : {}) };
-      e.border = { ...e.border, right: medio, ...(i === inicio ? { top: medio } : {}), ...(i === fin ? { bottom: medio } : {}) };
-      if (i === inicio || i === fin) {
-        for (const col of [2, 3, 4]) {
-          const c = ws.getCell(i, col);
-          c.border = { ...c.border, ...(i === inicio ? { top: medio } : { bottom: medio }) };
-        }
+      for (let c = 1; c <= 5; c++) {
+        const b = { ...(ws.getCell(i, c).border || {}) };
+        if (c === 1) b.left = marco;
+        if (c === 5) b.right = marco;
+        if (i === inicio) b.top = marco;
+        if (i === fin) b.bottom = marco;
+        if (c === 1 || c === 5 || i === inicio || i === fin) ws.getCell(i, c).border = b;
       }
     }
+    // Uno por hoja al imprimir.
+    ws.getRow(fin).addPageBreak();
     r += 2;
   }
   return wb.xlsx.writeBuffer();
 }
 
-module.exports = { construirTalonarios, excelTalonarios, nombreArchivoTalonarios, nombreEmpresaTalonario, limpiarConceptos, modoValido, MODOS, tituloPeriodo };
+/** PDF tamaño carta con dos talonarios por hoja (uno si es muy largo) y línea para recortar. */
+function pdfTalonarios({ empresa, resultado, logo }) {
+  const PDFDocument = require('pdfkit');
+  const doc = new PDFDocument({ size: 'LETTER', margin: 36, info: { Title: `Talonarios ${resultado.titulo}`, Author: nombreEmpresaTalonario(empresa) } });
+  const partes = [];
+  doc.on('data', (b) => partes.push(b));
+  const listo = new Promise((ok) => doc.on('end', () => ok(Buffer.concat(partes))));
+
+  const { principal, secundario } = coloresTalonario(empresa);
+  const claro = aclarar(principal, 0.9);
+  const gris = '#52646b';
+  const tinta = '#17252b';
+  const X = 36;
+  const W = 612 - 72;
+  const MITAD = (792 - 72) / 2;
+  const medidas = logo ? medidasPng(logo) : null;
+  const n = (v) => (v ? Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+  const FILA = 13;
+  const nombreEmpresa = nombreEmpresaTalonario(empresa);
+
+  const alto = (t) => {
+    const izq = t.ingresos.length + 2 + (t.gr ? 1 : 0) + t.adicionales.length;
+    const der = t.deducciones.length;
+    return 158 + Math.max(izq, der) * FILA + 26 + 64;
+  };
+
+  let y = 36;
+  let usado = 0; // talonarios en la hoja actual
+  resultado.talonarios.forEach((t) => {
+    const h = alto(t);
+    const cabeEnMitad = h <= MITAD - 12;
+    if (usado > 0 && (!cabeEnMitad || usado >= 2 || y + h > 792 - 36)) { doc.addPage(); y = 36; usado = 0; }
+    if (usado === 1) {
+      // Línea para recortar entre los dos talonarios.
+      doc.save().moveTo(X, y - 6).lineTo(X + W, y - 6).dash(4, { space: 3 }).lineWidth(0.6).strokeColor('#aebcb5').stroke().restore();
+      doc.font('Helvetica').fontSize(6.5).fillColor('#aebcb5').text('recortar aquí', X, y - 13, { width: W, align: 'center' });
+    }
+    let cy = y + 6;
+
+    // Encabezado.
+    if (logo) {
+      const lh = 60;
+      const lw = Math.min(200, (medidas.ancho / medidas.alto) * lh);
+      doc.image(logo, X, cy, { width: lw, height: lh });
+    }
+    doc.font('Helvetica-Bold').fontSize(14).fillColor(principal).text(nombreEmpresa, X, cy + 10, { width: W, align: logo ? 'right' : 'left' });
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(gris).text('TALONARIO DE PAGO', X, cy + 30, { width: W, align: logo ? 'right' : 'left', characterSpacing: 1.6 });
+    doc.font('Helvetica').fontSize(10).fillColor(tinta).text(resultado.titulo, X, cy + 42, { width: W, align: logo ? 'right' : 'left' });
+    cy += 66;
+    doc.rect(X, cy, W, 3).fill(secundario);
+    doc.rect(X, cy + 3, W, 1).fill(principal);
+    cy += 12;
+
+    // Empleado.
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(tinta).text(t.nombre, X, cy, { width: W * 0.65 });
+    doc.font('Helvetica').fontSize(9).fillColor(gris).text(`Cédula ${t.cedula}`, X + W * 0.5, cy + 2, { width: W * 0.5, align: 'right' });
+    cy += 16;
+    if (t.correo) doc.font('Helvetica').fontSize(8.5).fillColor(principal).text(t.correo, X, cy, { width: W });
+    cy += 16;
+
+    // Dos columnas: ingresos y deducciones.
+    const colW = (W - 16) / 2;
+    const cols = [X, X + colW + 16];
+    const cabecera = (x, texto) => {
+      doc.rect(x, cy, colW, 16).fill(claro);
+      doc.font('Helvetica-Bold').fontSize(8).fillColor(principal).text(texto, x + 6, cy + 5, { width: colW - 12, characterSpacing: 1 });
+    };
+    cabecera(cols[0], 'INGRESOS');
+    cabecera(cols[1], 'DEDUCCIONES');
+    const renglones = (x, lista, y0) => {
+      let yy = y0;
+      for (const [txt, monto, negrita] of lista) {
+        doc.font(negrita ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor(tinta)
+          .text(txt, x + 6, yy, { width: colW - 80, lineBreak: false, ellipsis: true })
+          .text(n(monto), x + colW - 80, yy, { width: 74, align: 'right' });
+        yy += FILA;
+      }
+      return yy;
+    };
+    const yIni = cy + 22;
+    const izq = [
+      ...t.ingresos.map((i) => [i.concepto, i.monto]),
+      ['Más: XIII mes', t.xiii],
+      ...(t.gr ? [['Más: gasto de representación', t.gr]] : []),
+      ...t.adicionales.map((a) => [`Más: ${a.concepto}`, a.monto]),
+    ];
+    const der = t.deducciones.map((d) => [d.concepto, d.monto]);
+    const filas = Math.max(izq.length, der.length);
+    renglones(cols[0], izq, yIni);
+    renglones(cols[1], der, yIni);
+    let yTot = yIni + filas * FILA + 2;
+    for (const x of cols) doc.moveTo(x + 6, yTot).lineTo(x + colW - 6, yTot).lineWidth(0.5).strokeColor(aclarar(principal, 0.5)).stroke();
+    yTot += 4;
+    const totalIngresos = round2(t.subtotal + t.xiii + t.gr + t.totalAdicionales);
+    renglones(cols[0], [['Total ingresos', totalIngresos, true]], yTot);
+    renglones(cols[1], [['Total deducciones', t.totalDeducciones, true]], yTot);
+    cy = yTot + FILA + 8;
+
+    // Neto a pagar.
+    doc.rect(X, cy, W, 26).fill(principal);
+    doc.font('Helvetica-Bold').fontSize(11).fillColor('#ffffff').text(resultado.etiquetaNeto, X + 10, cy + 8, { width: W / 2, characterSpacing: 1 });
+    doc.font('Helvetica-Bold').fontSize(14).fillColor('#ffffff').text(`B/. ${n(t.neto) || '0.00'}`, X + W / 2, cy + 6, { width: W / 2 - 10, align: 'right' });
+    doc.rect(X, cy + 26, W, 2).fill(secundario);
+    cy += 54;
+
+    // Firma.
+    const firmaW = 220;
+    doc.moveTo(X + W - firmaW, cy + 12).lineTo(X + W, cy + 12).lineWidth(0.6).strokeColor(tinta).stroke();
+    doc.font('Helvetica').fontSize(8).fillColor(gris).text('Recibí conforme', X + W - firmaW, cy + 15, { width: firmaW, align: 'center' });
+    doc.font('Helvetica').fontSize(8).fillColor(gris).text(`Cédula: ${t.cedula}`, X, cy + 15, { width: 200 });
+
+    usado = cabeEnMitad ? usado + 1 : 2;
+    y = cabeEnMitad ? 36 + MITAD + 6 : 792;
+  });
+  if (!resultado.talonarios.length) doc.font('Helvetica').fontSize(12).text('No hay empleados en este mes.');
+  doc.end();
+  return listo;
+}
+
+module.exports = { construirTalonarios, excelTalonarios, pdfTalonarios, nombreArchivoTalonarios, nombreEmpresaTalonario, coloresTalonario, limpiarConceptos, modoValido, MODOS, tituloPeriodo };

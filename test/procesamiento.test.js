@@ -9,12 +9,13 @@ const ExcelJS = require('exceljs');
 const { parseDetalleCSS } = require('../src/parseDetalleCSS');
 const { construirInforme03, excelInforme03, COLUMNAS } = require('../src/informe03');
 const { construirPlanilla03, excelPlanilla03, isrAnual } = require('../src/planilla03');
-const { construirTalonarios, excelTalonarios } = require('../src/talonarios');
+const { construirTalonarios, excelTalonarios, pdfTalonarios } = require('../src/talonarios');
 const { periodoDesdeTexto, round2 } = require('../src/util');
 const { FileStore } = require('../src/store/fileStore');
 const { Servicio } = require('../src/servicio');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'detalle_ejemplo.xls');
+const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 
 test('lee encabezado, totales y empleados del detalle de la CSS', async () => {
   const d = await parseDetalleCSS(FIXTURE);
@@ -202,9 +203,19 @@ test('Talonarios: quincenas que suman el mes de la CSS, descuentos y adicionales
   const ws = wb.getWorksheet('Talonarios');
   const filas = [];
   ws.eachRow((row, n) => filas.push([n, row.getCell(1).value, row.getCell(5).value]));
-  assert.equal(filas.filter(([, a]) => a === 'TALONARIO  DE PAGO').length, ago.empleados.length);
+  assert.equal(filas.filter(([, a]) => String(a).startsWith('TALONARIO DE PAGO')).length, ago.empleados.length);
   const netas = filas.filter(([, a]) => a === 'QUINCENA NETA').map(([, , e]) => e.result);
   assert.deepEqual(netas, t1.talonarios.map((t) => t.neto));
+
+  // Con logo y colores de la empresa: el Excel lleva la imagen y el PDF se genera.
+  const empresa = { ...ago.empresa, colores: { principal: '#0000c0', secundario: '#f00000' } };
+  const conLogo = await excelTalonarios({ empresa, resultado: t1, logo: PNG_1X1 });
+  const wb2 = new ExcelJS.Workbook();
+  await wb2.xlsx.load(conLogo);
+  assert.equal(wb2.getWorksheet('Talonarios').getImages().length, ago.empleados.length);
+  const pdf = await pdfTalonarios({ empresa, resultado: t1, logo: PNG_1X1 });
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+  assert.ok(pdf.length > 2000);
 });
 
 test('ISR anual por tramos', () => {
