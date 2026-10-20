@@ -22,9 +22,10 @@ function layout(titulo, cuerpo, { usuario, aviso, error, seccion } = {}) {
 <title>${h(titulo)} · Planilla 03</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${FUENTES}">
+<link rel="icon" type="image/png" href="/encarga.png"><meta name="theme-color" content="#001a4d">
 <link rel="stylesheet" href="/estilos.css?v=${VERSION}"><script src="/app.js?v=${VERSION}" defer></script></head>
 <body>
-${usuario ? `<header class="barra"><a class="marca" href="/">${marca()}<span class="marca-texto">Planilla 03<small>Detalle CSS → Informe DGI</small></span></a>
+${usuario ? `<header class="barra"><a class="marca" href="/">${marca()}<span class="marca-texto">Planilla 03<small>ENCARGA · Detalle CSS → Informe DGI</small></span></a>
 <nav>${nav('/', 'Empresas', 'empresas')}${nav('/empleados', 'Empleados', 'empleados')}
 <form method="post" action="/logout"><button class="enlace">Salir</button></form></nav></header>` : ''}
 <main>
@@ -35,7 +36,7 @@ ${cuerpo}
 }
 
 function marca() {
-  return '<span class="sello-marca" aria-hidden="true">03</span>';
+  return '<img class="logo-marca" src="/encarga.png" alt="" width="38" height="40">';
 }
 
 function login({ error, configurado }) {
