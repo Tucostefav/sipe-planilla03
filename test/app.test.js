@@ -84,6 +84,15 @@ test('flujo completo por HTTP: entrar, subir, ver y descargar', async (t) => {
   html = await (await get('/empresa/1234-5-67890')).text();
   assert.match(html, /12345678/);
 
+  // RUC con guiones: mismos dígitos que el de la CSS; se usa en el archivo para la DGI.
+  r = await fetch(`${base}/empresa/1234-5-67890/config`, { method: 'POST', headers: { cookie }, redirect: 'manual', body: new URLSearchParams({ idPlanilla: '12345678', rucDGI: '12345-678-90' }) });
+  assert.match(r.headers.get('location'), /ok=/);
+  r = await get('/empresa/1234-5-67890/informe03/202608/excel');
+  assert.match(r.headers.get('content-disposition'), /Informe03_12345-678-90_202608\.xlsx/);
+  await r.arrayBuffer();
+  r = await fetch(`${base}/empresa/1234-5-67890/config`, { method: 'POST', headers: { cookie }, redirect: 'manual', body: new URLSearchParams({ idPlanilla: '12345678', rucDGI: '999-1-2' }) });
+  assert.match(decodeURIComponent(r.headers.get('location')), /mismos dígitos/);
+
   html = await (await get('/empleados?q=JUAN')).text();
   assert.match(html, /8-100-200/);
 

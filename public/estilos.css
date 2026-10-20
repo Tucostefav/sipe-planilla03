@@ -177,8 +177,9 @@ button { font: inherit; cursor: pointer; }
 .cabecera-informe .tira.grande .mes { font-size: .72rem; }
 .cabecera-empresa { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 380px); gap: 24px; align-items: end; margin-bottom: 8px; }
 .cabecera-empresa .subtitulo { max-width: 60ch; }
-.config { display: flex; gap: 10px; align-items: flex-end; background: var(--hoja); border: 1px solid var(--linea); border-radius: var(--radio); padding: 14px; }
-.config label { flex: 1; margin: 0; }
+.config { display: flex; flex-direction: column; gap: 10px; align-items: stretch; background: var(--hoja); border: 1px solid var(--linea); border-radius: var(--radio); padding: 14px; }
+.config label { margin: 0; }
+.config .boton { align-self: flex-end; }
 .config.pendiente { border-color: var(--ambar); background: color-mix(in srgb, var(--ambar-claro) 60%, var(--hoja)); }
 .anio .tira { max-width: 760px; }
 

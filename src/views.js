@@ -1,6 +1,6 @@
 'use strict';
 
-const { escapeHtml: h, nombreMes, MESES } = require('./util');
+const { escapeHtml: h, nombreMes, MESES, rucDGI } = require('./util');
 const { COLUMNAS } = require('./informe03');
 const { MESES_MAYUS, MESES_CORTOS } = require('./planilla03');
 
@@ -75,7 +75,7 @@ function inicio({ empresas, usuario, aviso, error }) {
     const anio = e.ultimo ? anioDe(e.ultimo) : null;
     return `<article class="expediente">
 <header><h3><a href="${base}">${h(e.razonSocial || e.ruc)}</a></h3>
-<p class="dato">RUC <span class="mono">${h(e.ruc)}</span></p></header>
+<p class="dato">RUC <span class="mono">${h(rucDGI(e))}</span></p></header>
 ${anio ? tiraMeses(anio, e.periodos || [], (p) => `${base}/informe03/${p}`) : '<p class="nota">Sin meses cargados.</p>'}
 ${e.idPlanilla ? '' : `<p class="chip ambar"><a href="${base}">Falta ID_PLANILLA</a></p>`}
 <footer>${e.ultimo ? `<a href="${base}/informe03/${e.ultimo}">Informe 03 · ${h(nombreMes(e.ultimo))}</a>
@@ -218,10 +218,12 @@ function empresaPagina({ empresa, detalles, usuario, aviso }) {
 <p class="migas"><a href="/">Empresas</a></p>
 <section class="cabecera-empresa">
 <div><h1>${h(empresa.razonSocial || empresa.ruc)}</h1>
-<p class="subtitulo">RUC <span class="mono">${h(empresa.ruc)}</span> · Patronal <span class="mono">${h(empresa.patronal || '—')}</span></p></div>
+<p class="subtitulo">RUC <span class="mono">${h(rucDGI(empresa))}</span> · Patronal <span class="mono">${h(empresa.patronal || '—')}</span></p></div>
 <form method="post" action="${base}/config" class="config${empresa.idPlanilla ? '' : ' pendiente'}">
 <label>ID_PLANILLA <span class="nota">Código de planilla de la CSS. Va en la columna A del Informe 03.</span>
 <input name="idPlanilla" value="${h(empresa.idPlanilla || '')}" inputmode="numeric" class="mono" placeholder="Ej. 75842369"></label>
+<label>RUC con guiones <span class="nota">La CSS lo trae como ${h(empresa.ruc)}. Escríbelo separado por guiones como va a la DGI; se usa en el Informe 03 y la Planilla 03.</span>
+<input name="rucDGI" value="${h(empresa.rucDGI || empresa.ruc)}" class="mono" autocomplete="off"></label>
 <button class="boton secundario">Guardar</button></form>
 </section>
 ${anios.map((a) => `<section class="anio">

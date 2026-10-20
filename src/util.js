@@ -67,4 +67,9 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-module.exports = { cellText, toNumber, round2, norm, MESES, periodoDesdeTexto, nombreMes, compararCedula, escapeHtml };
+// RUC tal como se presenta a la DGI: el que se escribió con guiones en la empresa o, si no, el de la CSS.
+function rucDGI(empresa) {
+  return String((empresa && (empresa.rucDGI || empresa.ruc)) || '');
+}
+
+module.exports = { rucDGI, cellText, toNumber, round2, norm, MESES, periodoDesdeTexto, nombreMes, compararCedula, escapeHtml };
