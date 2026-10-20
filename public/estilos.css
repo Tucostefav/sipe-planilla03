@@ -319,6 +319,7 @@ table.cuotas td:first-child { min-width: 200px; }
 .t-neto { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 0; padding: 10px 0 8px; border-top: 1px solid var(--linea-fuerte); border-bottom: 3px double var(--tinta); }
 .t-neto span { font-family: var(--f-titulo); font-stretch: 125%; text-transform: uppercase; letter-spacing: .1em; font-weight: 800; font-size: .82rem; }
 .t-neto strong { font-size: 1.2rem; }
+.t-pdf { margin: 10px 0 0; text-align: right; font-size: .88rem; }
 .t-editar { margin-top: 12px; }
 .t-editar summary { cursor: pointer; color: var(--balboa); font-weight: 600; font-size: .9rem; }
 .t-editar form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
