@@ -109,6 +109,25 @@ test('flujo completo por HTTP: entrar, subir, ver y descargar', async (t) => {
   assert.match(r.headers.get('content-disposition'), /Talonarios_12345-678-90_202608_2da-quincena\.xlsx/);
   await r.arrayBuffer();
 
+  // Logo sin fondo y colores de la empresa; salen en los talonarios y en el PDF.
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  r = await fetch(`${base}/empresa/1234-5-67890/logo`, { method: 'POST', headers: { cookie }, redirect: 'manual', body: new URLSearchParams({ logo: png, principal: '#0000C0', secundario: '#f00000' }) });
+  assert.match(decodeURIComponent(r.headers.get('location')), /Logo guardado/);
+  r = await fetch(`${base}/empresa/1234-5-67890/logo`, { method: 'POST', headers: { cookie }, redirect: 'manual', body: new URLSearchParams({ logo: 'data:image/png;base64,AAAA' }) });
+  assert.match(decodeURIComponent(r.headers.get('location')), /debe ser una imagen/);
+  r = await get('/empresa/1234-5-67890/logo.png');
+  assert.equal(r.headers.get('content-type'), 'image/png');
+  await r.arrayBuffer();
+  html = await (await get('/empresa/1234-5-67890/talonarios/202608')).text();
+  assert.match(html, /class="t-logo"/);
+  assert.match(html, /--t-principal:#0000c0/);
+  r = await get('/empresa/1234-5-67890/talonarios/202608/pdf?modo=1&ver=1');
+  assert.equal(r.headers.get('content-type'), 'application/pdf');
+  assert.match(r.headers.get('content-disposition'), /^inline; filename="Talonarios_12345-678-90_202608_1ra-quincena\.pdf"/);
+  assert.equal(Buffer.from(await r.arrayBuffer()).subarray(0, 5).toString(), '%PDF-');
+  r = await fetch(`${base}/empresa/1234-5-67890/logo/borrar`, { method: 'POST', headers: { cookie }, redirect: 'manual' });
+  assert.equal((await get('/empresa/1234-5-67890/logo.png')).status, 404);
+
   html = await (await get('/empleados?q=JUAN')).text();
   assert.match(html, /8-100-200/);
 

@@ -303,7 +303,7 @@ table.cuotas td:first-child { min-width: 200px; }
 .talonario header { text-align: center; border-bottom: 1px solid var(--linea); padding-bottom: 10px; margin-bottom: 8px; }
 .talonario header p { margin: 0; }
 .t-empresa { font-family: var(--f-titulo); font-stretch: 125%; font-weight: 800; letter-spacing: .06em; font-size: .9rem; }
-.t-titulo { font-family: var(--f-titulo); font-stretch: 125%; text-transform: uppercase; letter-spacing: .18em; font-size: .68rem; color: var(--balboa); font-weight: 700; }
+.t-titulo { font-family: var(--f-titulo); font-stretch: 125%; text-transform: uppercase; letter-spacing: .18em; font-size: .68rem; color: var(--t-principal, var(--balboa)); font-weight: 700; }
 .talonario h3 { margin: 6px 0 2px; font-size: 1.1rem; }
 .t-correo, .t-ced { color: var(--tinta-suave); font-size: .85rem; }
 .t-lineas { list-style: none; margin: 0; padding: 0; font-size: .92rem; }
@@ -329,3 +329,30 @@ table.cuotas td:first-child { min-width: 200px; }
 select { font: inherit; padding: 8px 10px; border: 1px solid var(--linea-fuerte); border-radius: 8px; background: var(--hoja); color: var(--tinta); }
 .t-editar .boton { align-self: flex-start; }
 @media (max-width: 420px) { .pestanas a { padding: 6px 10px; font-size: .88rem; } }
+
+/* Logo y colores de la empresa en los talonarios. */
+.talonario { border-top: 4px solid var(--t-acento, var(--linea)); }
+.talonario::before { display: none; }
+.t-logo { display: block; max-height: 54px; max-width: 70%; margin: 0 auto 8px; }
+.t-empresa { color: var(--t-principal, var(--tinta)); }
+.t-neto { border-bottom: 0; background: var(--t-principal, var(--balboa)); color: #fff; padding: 10px 12px; border-radius: 4px; box-shadow: 0 3px 0 var(--t-acento, transparent); }
+.t-neto span, .t-neto strong { color: #fff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .t-logo { background: #fff; border-radius: 6px; padding: 4px; } }
+:root[data-theme="dark"] .t-logo { background: #fff; border-radius: 6px; padding: 4px; }
+.marca-rejilla { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 700px) { .marca-rejilla { grid-template-columns: 1fr; } }
+.marca-actual { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.marca-actual form { margin: 0; }
+/* Cuadrícula de fondo para que se vea que el logo es transparente. */
+.logo-vista { width: 100%; min-height: 96px; display: grid; place-items: center; padding: 12px; border: 1px solid var(--linea); border-radius: 8px;
+  background: repeating-conic-gradient(#e6ebe8 0 25%, #ffffff 0 50%) 0 0 / 16px 16px; color: var(--tinta-suave); font-size: .9rem; }
+.logo-vista img { max-width: 100%; max-height: 120px; }
+.logo-vista.vacia { background: var(--hoja); border-style: dashed; }
+.marca-form { display: flex; flex-direction: column; gap: 12px; }
+.marca-form label { display: flex; flex-direction: column; gap: 4px; }
+.colores { display: flex; gap: 16px; flex-wrap: wrap; }
+.colores label { flex-direction: row; align-items: center; gap: 8px; }
+input[type="color"] { width: 44px; height: 32px; padding: 2px; border-radius: 6px; cursor: pointer; }
+.muestras { display: flex; gap: 6px; margin: 0; }
+.muestras span { width: 28px; height: 14px; border-radius: 3px; border: 1px solid var(--linea); }
+.marca-form .boton { align-self: flex-start; }

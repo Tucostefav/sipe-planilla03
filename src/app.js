@@ -8,7 +8,7 @@ const { Servicio } = require('./servicio');
 const { rucDGI } = require('./util');
 const { excelInforme03, nombreArchivoInforme03 } = require('./informe03');
 const { excelPlanilla03, nombreArchivoPlanilla03 } = require('./planilla03');
-const { excelTalonarios, nombreArchivoTalonarios, modoValido } = require('./talonarios');
+const { excelTalonarios, pdfTalonarios, nombreArchivoTalonarios, modoValido } = require('./talonarios');
 
 const MAX_ARCHIVOS = 36;
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -20,7 +20,8 @@ function crearApp({ store, auth }) {
 
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
-  app.use(express.urlencoded({ extended: false, limit: '2mb' }));
+  // El logo llega como data URL en el formulario de la empresa.
+  app.use(express.urlencoded({ extended: false, limit: '4mb' }));
   app.use(express.static(path.join(__dirname, '..', 'public')));
   app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
@@ -159,10 +160,45 @@ function crearApp({ store, auth }) {
 
   app.get('/empresa/:ruc/talonarios/:periodo/excel', envolver(async (req, res) => {
     const modo = modoValido(req.query.modo);
-    const t = await svc.talonarios(req.params.ruc, req.params.periodo, modo);
+    const t = await svc.talonarios(req.params.ruc, req.params.periodo, modo, { conLogo: true });
     if (!t) return res.sendStatus(404);
     const buf = await excelTalonarios(t);
     res.attachment(nombreArchivoTalonarios(rucDGI(t.empresa), t.detalle.periodo, modo)).type(XLSX_MIME).send(Buffer.from(buf));
+  }));
+
+  // ?ver=1 lo abre en el navegador; sin eso se descarga.
+  app.get('/empresa/:ruc/talonarios/:periodo/pdf', envolver(async (req, res) => {
+    const modo = modoValido(req.query.modo);
+    const t = await svc.talonarios(req.params.ruc, req.params.periodo, modo, { conLogo: true });
+    if (!t) return res.sendStatus(404);
+    const buf = await pdfTalonarios(t);
+    const nombre = nombreArchivoTalonarios(rucDGI(t.empresa), t.detalle.periodo, modo, 'pdf');
+    res.set('Content-Disposition', `${req.query.ver ? 'inline' : 'attachment'}; filename="${nombre}"`).type('application/pdf').send(buf);
+  }));
+
+  app.get('/empresa/:ruc/logo.png', envolver(async (req, res) => {
+    const png = await svc.logo(req.params.ruc);
+    if (!png) return res.sendStatus(404);
+    res.set('Cache-Control', 'private, max-age=60').type('image/png').send(png);
+  }));
+
+  // Logo sin fondo (lo prepara el navegador) y los colores de la marca para los talonarios.
+  app.post('/empresa/:ruc/logo', envolver(async (req, res) => {
+    const volver = `/empresa/${encodeURIComponent(req.params.ruc)}`;
+    if (!(await svc.empresa(req.params.ruc))) return res.status(404).send(V.errorPagina('Empresa no encontrada.', req.usuario));
+    const colores = { principal: req.body.principal, secundario: req.body.secundario };
+    try {
+      if (req.body.logo) await svc.guardarLogo(req.params.ruc, req.body.logo, colores);
+      else await svc.guardarColores(req.params.ruc, colores);
+    } catch (e) {
+      return res.redirect(`${volver}?error=` + encodeURIComponent(e.message) + '#marca');
+    }
+    res.redirect(`${volver}?ok=` + encodeURIComponent(req.body.logo ? 'Logo guardado. Ya sale en los talonarios.' : 'Colores guardados.') + '#marca');
+  }));
+
+  app.post('/empresa/:ruc/logo/borrar', envolver(async (req, res) => {
+    await svc.borrarLogo(req.params.ruc);
+    res.redirect(`/empresa/${encodeURIComponent(req.params.ruc)}?ok=` + encodeURIComponent('Logo quitado.') + '#marca');
   }));
 
   // Correo y descuentos o adicionales fijos de un empleado; se repiten cada quincena.
@@ -225,6 +261,7 @@ function crearApp({ store, auth }) {
   app.use((err, req, res, next) => {
     console.error(err);
     const msg = err.code === 'LIMIT_FILE_SIZE' ? 'Uno de los archivos es demasiado grande (máximo 15 MB).'
+      : err.type === 'entity.too.large' ? 'La imagen del logo es demasiado grande. Prueba con una más pequeña.'
       : err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE' ? `Se pueden subir hasta ${MAX_ARCHIVOS} archivos a la vez.`
       : 'Error interno. Revisa el registro del servidor.';
     res.status(500).send(V.errorPagina(msg, req.usuario));

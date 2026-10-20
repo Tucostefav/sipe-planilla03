@@ -3,7 +3,7 @@
 const { escapeHtml: h, nombreMes, MESES, rucDGI } = require('./util');
 const { COLUMNAS } = require('./informe03');
 const { MESES_MAYUS, MESES_CORTOS } = require('./planilla03');
-const { MODOS, nombreEmpresaTalonario } = require('./talonarios');
+const { MODOS, nombreEmpresaTalonario, coloresTalonario } = require('./talonarios');
 
 const fmt = (n) => (n === null || n === undefined || n === '' ? '' : Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const enc = encodeURIComponent;
@@ -231,6 +231,7 @@ function empresaPagina({ empresa, detalles, usuario, aviso }) {
 <input name="nombreTalonario" value="${h(empresa.nombreTalonario || '')}" autocomplete="off"></label>
 <button class="boton secundario">Guardar</button></form>
 </section>
+${panelMarca(empresa)}
 ${anios.map((a) => `<section class="anio">
 <div class="titulo-seccion"><h2>${a}</h2><span class="contador">${plural(periodos.filter((p) => anioDe(p) === a).length, 'mes', 'meses')}</span>
 <a class="boton secundario" href="${base}/planilla03/${a}">Planilla 03 ${a}</a></div>
@@ -246,6 +247,28 @@ ${detalles.map((d) => `<tr><td>${h(nombreMes(d.periodo))}</td><td class="n">${d.
 </tbody></table></div>` : ''}
 <h2>Subir más meses</h2>
 ${formSubir({ compacto: true })}`, { usuario, aviso, seccion: 'empresas' });
+}
+
+// Logo y colores de la empresa para los talonarios. El navegador le quita el fondo blanco al logo.
+function panelMarca(empresa) {
+  const base = `/empresa/${enc(empresa.ruc)}`;
+  const { principal, secundario } = coloresTalonario(empresa);
+  return `<section class="panel marca-empresa" id="marca">
+<div class="titulo-seccion"><h2>Logo y colores de los talonarios</h2></div>
+<div class="marca-rejilla">
+<div class="marca-actual">${empresa.logo ? `<div class="logo-vista"><img src="${base}/logo.png?v=${h(empresa.logo)}" alt="Logo de ${h(empresa.razonSocial || '')}"></div>
+<form method="post" action="${base}/logo/borrar" onsubmit="return confirm('¿Quitar el logo de los talonarios?')"><button class="enlace peligro">Quitar logo</button></form>`
+    : '<div class="logo-vista vacia">Sin logo</div>'}
+<p class="muestras"><span style="background:${h(principal)}"></span><span style="background:${h(secundario)}"></span></p></div>
+<form method="post" action="${base}/logo" class="marca-form" data-logo>
+<label>${empresa.logo ? 'Cambiar logo' : 'Subir logo'} <span class="nota">JPG o PNG. Se le quita el fondo blanco y se toman sus colores.</span>
+<input type="file" accept="image/png,image/jpeg,image/webp" aria-label="Archivo del logo"></label>
+<input type="hidden" name="logo">
+<div class="logo-vista nueva" data-logo-vista hidden></div>
+<div class="colores"><label>Color principal <input type="color" name="principal" value="${h(principal)}"></label>
+<label>Color de acento <input type="color" name="secundario" value="${h(secundario)}"></label></div>
+<button class="boton secundario">Guardar</button></form>
+</div></section>`;
 }
 
 // Grupos de columnas del Informe 03 (en el orden de la DGI) para la fila de arriba del encabezado.
@@ -332,10 +355,12 @@ function talonariosPagina({ empresa, detalle, resultado, usuario, aviso, error }
   const { modo, talonarios: ts } = resultado;
   const totalNeto = ts.reduce((s, t) => s + t.neto, 0);
   const linea = (concepto, monto, { clase = '', col = 'd' } = {}) => `<li class="${col}${clase ? ` ${clase}` : ''}"><span>${h(concepto)}</span><span class="mono">${monto ? fmt(monto) : ''}</span></li>`;
+  const { principal, secundario } = coloresTalonario(empresa);
+  const logo = empresa.logo ? `<img class="t-logo" src="${base}/logo.png?v=${h(empresa.logo)}" alt="">` : '';
   const tarjeta = (t) => {
     const filas = [...t.conceptos, { tipo: 'descuento', nombre: '', monto: '' }, { tipo: 'adicional', nombre: '', monto: '' }];
     return `<article class="talonario" id="t-${h(t.cedula)}">
-<header><p class="t-empresa">${h(nombreEmpresaTalonario(empresa))}</p><p class="t-titulo">Talonario de pago</p>
+<header>${logo}<p class="t-empresa">${h(nombreEmpresaTalonario(empresa))}</p><p class="t-titulo">Talonario de pago</p>
 <h3>${h(t.nombre)}</h3>${t.correo ? `<p class="t-correo">${h(t.correo)}</p>` : ''}<p class="mono t-ced">CED. ${h(t.cedula)}</p></header>
 <ul class="t-lineas">
 ${t.ingresos.map((i) => linea(i.concepto, i.monto)).join('')}
@@ -366,13 +391,15 @@ ${t.adicionales.map((a) => linea(`Más: ${a.concepto}`, a.monto)).join('')}
 <div><p class="ceja">Talonarios de pago</p><h1>${h(resultado.titulo)}</h1>
 <p class="subtitulo">${h(empresa.razonSocial)} · ${plural(ts.length, 'empleado', 'empleados')} · neto a pagar B/. ${fmt(totalNeto)}</p>
 <nav class="pestanas" aria-label="Periodo del talonario">${Object.entries(MODOS).map(([k, m]) => `<a href="${url}?modo=${k}"${k === modo ? ' aria-current="page"' : ''}>${h(m.corto)}</a>`).join('')}</nav>
-<div class="botones"><a class="boton" href="${url}/excel?modo=${modo}">Descargar talonarios en Excel</a>
-<a class="boton secundario" href="${base}/informe03/${detalle.periodo}">Informe 03</a></div></div>
+<div class="botones"><a class="boton" href="${url}/pdf?modo=${modo}&amp;ver=1" target="_blank" rel="noopener">Ver PDF</a>
+<a class="boton secundario" href="${url}/pdf?modo=${modo}">Descargar PDF</a>
+<a class="boton secundario" href="${url}/excel?modo=${modo}">Descargar Excel</a></div>
+${empresa.logo ? '' : `<p class="nota">Sin logo. <a href="${base}#marca">Súbelo en la página de la empresa</a> para que salga en el PDF y el Excel.</p>`}</div>
 </section>
 <p class="nota">Salen del detalle de la CSS de ${h(nombreMes(detalle.periodo))}. ${modo === 'mes' ? 'Montos del mes completo; los fijos por quincena van por dos.' : 'El mes se reparte en dos quincenas iguales (la 2da lleva los centavos que sobran) y el XIII mes va completo en la 1ra quincena.'} El SS y SE, el SS del XIII y el ISR suman lo mismo que reportó la CSS.</p>
 <div class="titulo-seccion"><h2>Talonarios</h2><span class="contador">${ts.length}</span>
 <input type="search" class="filtro" placeholder="Filtrar por cédula o nombre" data-filtro-tarjetas=".talonarios" aria-label="Filtrar talonarios"></div>
-<div class="talonarios">${ts.map(tarjeta).join('')}</div>`, { usuario, aviso, error, seccion: 'empresas' });
+<div class="talonarios" style="--t-principal:${h(principal)};--t-acento:${h(secundario)}">${ts.map(tarjeta).join('')}</div>`, { usuario, aviso, error, seccion: 'empresas' });
 }
 
 function empleadosPagina({ empleados, usuario, aviso, error, q }) {

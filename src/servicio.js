@@ -8,7 +8,8 @@ const { construirPlanilla03 } = require('./planilla03');
 const { construirTalonarios, limpiarConceptos } = require('./talonarios');
 
 // Colecciones: empresas (id = RUC), detalles (id = RUC|AAAAMM), empleados (id = cédula),
-// talonarios (id = RUC|cédula: correo y descuentos o adicionales fijos de cada empleado).
+// talonarios (id = RUC|cédula: correo y descuentos o adicionales fijos de cada empleado),
+// logos (id = RUC: logo PNG sin fondo para los talonarios; aparte para no cargarlo con la empresa).
 class Servicio {
   constructor(store) {
     this.store = store;
@@ -78,11 +79,37 @@ class Servicio {
     return { empresa, planilla: construirPlanilla03({ anio, detalles, buscarEmpleado: buscar }) };
   }
 
-  async talonarios(ruc, periodo, modo) {
-    const [empresa, detalle, ajustes] = await Promise.all([this.empresa(ruc), this.detalle(ruc, periodo), this.store.list('talonarios', `${ruc}|`)]);
+  async talonarios(ruc, periodo, modo, { conLogo = false } = {}) {
+    const [empresa, detalle, ajustes, logo] = await Promise.all([this.empresa(ruc), this.detalle(ruc, periodo),
+      this.store.list('talonarios', `${ruc}|`), conLogo ? this.logo(ruc) : null]);
     if (!empresa || !detalle) return null;
     const porCedula = new Map(ajustes.map((a) => [a.cedula, a]));
-    return { empresa, detalle, resultado: construirTalonarios(detalle, { modo, ajustes: (c) => porCedula.get(c) || null }) };
+    return { empresa, detalle, logo, resultado: construirTalonarios(detalle, { modo, ajustes: (c) => porCedula.get(c) || null }) };
+  }
+
+  /** Logo PNG de la empresa (Buffer) o null. */
+  async logo(ruc) {
+    const doc = await this.store.get('logos', ruc);
+    return doc ? Buffer.from(doc.png, 'base64') : null;
+  }
+
+  /** Guarda el logo (data URL PNG, ya sin fondo) y los colores de la marca. */
+  async guardarLogo(ruc, dataUrl, { principal, secundario } = {}) {
+    const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+    const png = m && Buffer.from(m[1], 'base64');
+    if (!png || png.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('El logo debe ser una imagen. Elige un JPG o PNG.');
+    if (png.length > 2 * 1024 * 1024) throw new Error('El logo es demasiado grande (máximo 2 MB).');
+    await this.store.put('logos', ruc, { ruc, png: png.toString('base64') });
+    await this.guardarEmpresa(ruc, { logo: Date.now(), colores: limpiarColores({ principal, secundario }) });
+  }
+
+  async guardarColores(ruc, colores) {
+    await this.guardarEmpresa(ruc, { colores: limpiarColores(colores) });
+  }
+
+  async borrarLogo(ruc) {
+    await this.store.delete('logos', ruc);
+    await this.guardarEmpresa(ruc, { logo: false });
   }
 
   async guardarAjusteTalonario(ruc, cedula, { correo, conceptos }) {
@@ -185,6 +212,11 @@ class Servicio {
     await this.store.putMany('empleados', docs);
     return { leidos: encontrados.length, nuevos, actualizados };
   }
+}
+
+function limpiarColores({ principal, secundario } = {}) {
+  const c = (v) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v).toLowerCase() : '');
+  return { principal: c(principal), secundario: c(secundario) };
 }
 
 function normalizarDV(dv) {
