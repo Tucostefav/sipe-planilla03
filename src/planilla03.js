@@ -40,6 +40,8 @@ function valoresMes(e) {
     ppSS: round2(Math.max(0, pp - mes / 2)),
     xiii: round2((e.componentes.DTM || {}).reportado || 0),
     isr: round2((e.componentes.ISR || {}).reportado || 0),
+    // El gasto de representación paga seguro social pero no seguro educativo.
+    gr: round2((e.componentes.GASTO_REPRESENTACION || {}).constituyeSalario || 0),
   };
 }
 
@@ -94,11 +96,11 @@ function construirPlanilla03({ anio, detalles, buscarEmpleado }) {
       ssXiiiPatronal: cuota((b, v) => v.xiii * t.ssXiiiPatronal),
       // Seguro educativo: la CSS redondea la tasa combinada (2.75%) por empleado;
       // la parte patronal es lo que queda al restar la del empleado.
-      sePatronal: cuota((b, v) => round2(v.mes * (t.sePatronal + t.seEmpleado)) - round2(v.mes * t.seEmpleado)),
+      sePatronal: cuota((b, v) => round2((v.mes - v.gr) * (t.sePatronal + t.seEmpleado)) - round2((v.mes - v.gr) * t.seEmpleado)),
       riesgo: cuota((b) => b * riesgo),
       ssEmpleado: cuota((b) => b * t.ssEmpleado),
       ssXiiiEmpleado: cuota((b, v) => v.xiii * t.ssXiiiEmpleado),
-      seEmpleado: cuota((b, v) => v.mes * t.seEmpleado),
+      seEmpleado: cuota((b, v) => (v.mes - v.gr) * t.seEmpleado),
       tasas: { ...t, riesgo },
     };
     r.subtotalPatronal = round2(r.ssPatronal + r.ssXiiiPatronal + r.sePatronal + r.riesgo);

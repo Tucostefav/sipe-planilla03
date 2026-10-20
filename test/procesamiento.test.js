@@ -131,7 +131,7 @@ test('Planilla 03: columnas del mes, PP SS y acumulado anual', async () => {
   assert.equal(p.filas.length, 4);
   assert.deepEqual(p.mesesCargados.map((m, i) => (m ? i : null)).filter((x) => x !== null), [6, 7]);
   const juan = p.filas.find((f) => f.cedula === '8-100-200');
-  assert.deepEqual(juan.meses[7], { mes: 640, pp: 400, ppSS: 80, xiii: 213.33, isr: 36 });
+  assert.deepEqual(juan.meses[7], { mes: 640, pp: 400, ppSS: 80, xiii: 213.33, isr: 36, gr: 0 });
   assert.equal(juan.total, 2506.66);
   assert.equal(juan.isrRetenido, 72);
   const rosa = p.filas.find((f) => f.cedula === '2-700-800');
@@ -149,6 +149,19 @@ test('Planilla 03: columnas del mes, PP SS y acumulado anual', async () => {
   const ws = wb.getWorksheet('Planilla03');
   assert.equal(ws.getCell('A5').value, 'NOMBRE');
   assert.equal(ws.getCell('B6').value, '2-700-800');
+});
+
+test('Planilla 03: el gasto de representación no paga seguro educativo', () => {
+  // Caso real: 1,500 de sueldo + 700 de gasto de representación; la CSS cobra SE solo sobre 1,500.
+  const detalle = {
+    periodo: '202609', empresa: { tasaRiesgo: 0.0119 }, totales: { SS: 506, SE: 41.25, RIESGO: 26.18, ISR: 0 },
+    empleados: [{ cedula: '8-1-1', nombre: 'A', apellido: 'B', salario: 2200, novedades: [], cuotas: {},
+      componentes: { SUELDO: { reportado: 1500, constituyeSalario: 1500 }, GASTO_REPRESENTACION: { reportado: 700, constituyeSalario: 700 } } }],
+  };
+  const r = construirPlanilla03({ anio: 2026, detalles: [detalle], buscarEmpleado: () => null }).resumen[8];
+  assert.equal(round2(r.sePatronal + r.seEmpleado), 41.25);
+  assert.equal(round2(r.ssPatronal + r.ssEmpleado), 506);
+  assert.equal(r.diferencia, 0);
 });
 
 test('ISR anual por tramos', () => {
