@@ -1,23 +1,25 @@
-/* Planilla 03 · paleta "papel de planilla": tinta azul negra, verde balboa y sellos de goma. */
+/* Planilla 03 · colores de ENCARGA: azul marino, azul rey y celeste del logo. */
 :root {
-  --papel: #eef2ef;
-  --hoja: #fbfcfb;
-  --tinta: #17252b;
-  --tinta-suave: #52646b;
-  --linea: #d3dcd7;
-  --linea-fuerte: #aebcb5;
-  --balboa: #0d5a4a;
-  --balboa-hover: #0a4739;
-  --balboa-claro: #dcebe5;
-  --sello-verde: #1b7a4c;
+  --papel: #eef3fb;
+  --hoja: #fbfcff;
+  --tinta: #0b1a3a;
+  --tinta-suave: #4a5a7a;
+  --linea: #d3dcec;
+  --linea-fuerte: #a9b8d3;
+  --balboa: #005af8;
+  --balboa-hover: #003bc3;
+  --balboa-claro: #e0ecff;
+  --sello-verde: #13804f;
   --sello-rojo: #b3261e;
   --rojo-claro: #f8e3e0;
   --ambar: #9a5f00;
   --ambar-claro: #f8ecd2;
-  --cabecera: #e4ebe7;
-  --barra: #17252b;
-  --barra-texto: #e9f0ec;
-  --sombra: 0 1px 0 rgba(23, 37, 43, .04), 0 6px 20px -12px rgba(23, 37, 43, .25);
+  --cabecera: #e4ecf8;
+  --barra: #001a4d;
+  --barra-texto: #e8f0ff;
+  --celeste: #029afe;
+  --degradado: linear-gradient(90deg, #029afe, #0071fd 45%, #003bc3);
+  --sombra: 0 1px 0 rgba(0, 26, 77, .04), 0 6px 20px -12px rgba(0, 26, 77, .3);
 
   --f-titulo: "Archivo", "Arial Narrow", system-ui, sans-serif;
   --f-texto: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -26,16 +28,16 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --papel: #0f1719; --hoja: #162124; --tinta: #e3ebe7; --tinta-suave: #9db0a8; --linea: #2a3a3e; --linea-fuerte: #3d5157;
-    --balboa: #4fbf9c; --balboa-hover: #6fd3b2; --balboa-claro: #173a32; --sello-verde: #5fd39a; --sello-rojo: #ff8a80;
-    --rojo-claro: #3a1f1d; --ambar: #f0b85a; --ambar-claro: #3a2c12; --cabecera: #1c2a2d; --barra: #0a1012; --barra-texto: #e3ebe7;
+    --papel: #07112a; --hoja: #0d1a3a; --tinta: #e6eeff; --tinta-suave: #9aaed3; --linea: #1e2e55; --linea-fuerte: #2f4473;
+    --balboa: #3aa8ff; --balboa-hover: #6cc0ff; --balboa-claro: #10284f; --sello-verde: #5fd39a; --sello-rojo: #ff8a80;
+    --rojo-claro: #3a1f1d; --ambar: #f0b85a; --ambar-claro: #3a2c12; --cabecera: #0f2046; --barra: #000b24; --barra-texto: #e6eeff;
     --sombra: 0 1px 0 rgba(0, 0, 0, .3), 0 8px 24px -14px rgba(0, 0, 0, .6);
   }
 }
 :root[data-theme="dark"] {
-  --papel: #0f1719; --hoja: #162124; --tinta: #e3ebe7; --tinta-suave: #9db0a8; --linea: #2a3a3e; --linea-fuerte: #3d5157;
-  --balboa: #4fbf9c; --balboa-hover: #6fd3b2; --balboa-claro: #173a32; --sello-verde: #5fd39a; --sello-rojo: #ff8a80;
-  --rojo-claro: #3a1f1d; --ambar: #f0b85a; --ambar-claro: #3a2c12; --cabecera: #1c2a2d; --barra: #0a1012; --barra-texto: #e3ebe7;
+  --papel: #07112a; --hoja: #0d1a3a; --tinta: #e6eeff; --tinta-suave: #9aaed3; --linea: #1e2e55; --linea-fuerte: #2f4473;
+  --balboa: #3aa8ff; --balboa-hover: #6cc0ff; --balboa-claro: #10284f; --sello-verde: #5fd39a; --sello-rojo: #ff8a80;
+  --rojo-claro: #3a1f1d; --ambar: #f0b85a; --ambar-claro: #3a2c12; --cabecera: #0f2046; --barra: #000b24; --barra-texto: #e6eeff;
 }
 
 * { box-sizing: border-box; }
@@ -64,17 +66,19 @@ h3 { font-size: 1.05rem; font-weight: 700; margin: 0; }
 
 /* ---------- Barra ---------- */
 .barra { position: sticky; top: 0; z-index: 20; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 10px max(16px, calc((100vw - 1400px) / 2 + 16px)); background: var(--barra); color: var(--barra-texto); }
+  padding: 10px max(16px, calc((100vw - 1400px) / 2 + 16px)); background: var(--barra); color: var(--barra-texto);
+  border-bottom: 3px solid transparent; border-image: var(--degradado) 1; }
 .marca { display: flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; }
 .marca:hover { color: inherit; }
 .marca-texto { font-family: var(--f-titulo); font-stretch: 125%; font-weight: 800; font-size: 1rem; line-height: 1.1; display: flex; flex-direction: column; }
 .marca-texto small { font-family: var(--f-texto); font-stretch: 100%; font-weight: 400; font-size: .74rem; opacity: .7; letter-spacing: .02em; }
-.sello-marca { display: inline-grid; place-items: center; width: 38px; height: 38px; border: 2px solid currentColor; outline: 1px solid currentColor; outline-offset: 2px;
-  border-radius: 6px; font-family: var(--f-titulo); font-stretch: 125%; font-weight: 900; font-size: .95rem; transform: rotate(-6deg); color: #7fd8b5; }
+.logo-marca { width: 38px; height: 40px; object-fit: contain; display: block; }
+/* En la barra oscura el logo va sobre una placa blanca para que no se pierda su parte azul marino. */
+.barra .logo-marca { width: 42px; height: 42px; padding: 4px; background: #fff; border-radius: 10px; }
 .barra nav { display: flex; gap: 4px; align-items: center; }
 .barra nav a, .barra nav .enlace { color: var(--barra-texto); text-decoration: none; padding: 6px 12px; border-radius: 999px; font-size: .95rem; }
 .barra nav a:hover, .barra nav .enlace:hover { background: rgba(255, 255, 255, .08); color: #fff; }
-.barra nav a[aria-current="page"] { background: rgba(127, 216, 181, .16); color: #bff0dc; }
+.barra nav a[aria-current="page"] { background: rgba(2, 154, 254, .2); color: #a8dbff; }
 .barra nav form { margin: 0; }
 
 main { max-width: 1400px; margin: 0 auto; padding: 20px 16px 64px; }
@@ -95,7 +99,7 @@ button { font: inherit; cursor: pointer; }
 .boton.secundario { background: transparent; color: var(--balboa); }
 .boton.secundario:hover { background: var(--balboa-claro); color: var(--balboa-hover); }
 .boton.pequeno { padding: 6px 12px; font-size: .85rem; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .boton:not(.secundario) { color: #0b1d18; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .boton:not(.secundario) { color: #001a4d; } }
 .enlace { background: none; border: 0; color: var(--balboa); padding: 0; text-decoration: underline; }
 .peligro { color: var(--sello-rojo); }
 .botones { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
@@ -169,7 +173,7 @@ button { font: inherit; cursor: pointer; }
 .tira .mes.lleno { background: var(--balboa); border: 1px solid var(--balboa); color: #fff; font-weight: 600; }
 .tira a.mes.lleno:hover { background: var(--balboa-hover); }
 .tira.grande .mes { height: 44px; font-size: .82rem; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tira .mes.lleno { color: #0b1d18; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tira .mes.lleno { color: #001a4d; } }
 
 /* ---------- Cabeceras de página ---------- */
 .cabecera-resultado, .cabecera-informe { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center; margin-bottom: 8px; }
@@ -263,7 +267,7 @@ table.cuotas td:first-child { min-width: 200px; }
 /* ---------- Login ---------- */
 .login { max-width: 400px; margin: 10vh auto 0; background: var(--hoja); border: 1px solid var(--linea); border-radius: 14px; padding: 32px; box-shadow: var(--sombra); }
 .login-marca { display: flex; align-items: center; gap: 18px; margin-bottom: 20px; }
-.login-marca .sello-marca { width: 56px; height: 56px; font-size: 1.35rem; color: var(--balboa); }
+.login-marca .logo-marca { width: 60px; height: 62px; }
 .login-marca h1 { margin: 0; }
 .login .boton { width: 100%; justify-content: center; margin-top: 6px; }
 
@@ -346,7 +350,7 @@ select { font: inherit; padding: 8px 10px; border: 1px solid var(--linea-fuerte)
 .marca-actual form { margin: 0; }
 /* Cuadrícula de fondo para que se vea que el logo es transparente. */
 .logo-vista { width: 100%; min-height: 96px; display: grid; place-items: center; padding: 12px; border: 1px solid var(--linea); border-radius: 8px;
-  background: repeating-conic-gradient(#e6ebe8 0 25%, #ffffff 0 50%) 0 0 / 16px 16px; color: var(--tinta-suave); font-size: .9rem; }
+  background: repeating-conic-gradient(#e6ebf3 0 25%, #ffffff 0 50%) 0 0 / 16px 16px; color: var(--tinta-suave); font-size: .9rem; }
 .logo-vista img { max-width: 100%; max-height: 120px; }
 .logo-vista.vacia { background: var(--hoja); border-style: dashed; }
 .marca-form { display: flex; flex-direction: column; gap: 12px; }

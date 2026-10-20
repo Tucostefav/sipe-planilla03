@@ -135,10 +135,10 @@ function nombreArchivoTalonario(t, periodo, modo) {
   return `Talonario_${limpio(t.nombre) || 'empleado'}_${limpio(t.cedula)}_${periodo}_${MODOS[modoValido(modo)].archivo}.pdf`;
 }
 
-// Colores de la marca de la empresa (los toma del logo); si no tiene, verde y tinta de la app.
+// Colores de la marca de la empresa (los toma del logo); si no tiene, los azules de ENCARGA.
 function coloresTalonario(empresa) {
   const c = (empresa && empresa.colores) || {};
-  return { principal: c.principal || '#0d5a4a', secundario: c.secundario || '#17252b' };
+  return { principal: c.principal || '#005af8', secundario: c.secundario || '#001a4d' };
 }
 
 // Mezcla un color con blanco: aclarar('#0000c0', 0.9) -> el tono muy claro para los fondos.
