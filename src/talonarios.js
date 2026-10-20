@@ -173,18 +173,16 @@ async function excelTalonarios({ empresa, resultado, logo }) {
     const fila = (alto) => { if (alto) ws.getRow(r).height = alto; return r++; };
     const unir = (f, c1, c2) => ws.mergeCells(f, c1, f, c2);
 
-    // Encabezado: logo a la izquierda y el nombre de la empresa a la derecha.
+    // Encabezado: logo a la izquierda y el nombre de la empresa centrado.
     const fLogo = fila(52);
     if (idLogo !== null) {
       const alto = 46;
       const ancho = Math.min(230, (medidas.ancho / medidas.alto) * alto);
       ws.addImage(idLogo, { tl: { col: 0.15, row: fLogo - 1 + 0.08 }, ext: { width: ancho * 1.333, height: alto * 1.333 }, editAs: 'oneCell' });
-      unir(fLogo, 2, 5);
-      Object.assign(ws.getCell(fLogo, 2), { value: nombreEmpresa, font: { bold: true, size: 14, color: { argb: argb(principal) } }, alignment: { horizontal: 'right', vertical: 'middle' } });
-    } else {
-      unir(fLogo, 1, 5);
-      Object.assign(ws.getCell(fLogo, 1), { value: nombreEmpresa, font: { bold: true, size: 14, color: { argb: argb(principal) } }, alignment: { horizontal: 'center', vertical: 'middle' } });
     }
+    // El nombre de la empresa va centrado en todo el ancho; el logo queda encima, a la izquierda.
+    unir(fLogo, 1, 5);
+    Object.assign(ws.getCell(fLogo, 1), { value: nombreEmpresa, font: { bold: true, size: 14, color: { argb: argb(principal) } }, alignment: { horizontal: 'center', vertical: 'middle' } });
     const fTitulo = fila(20);
     unir(fTitulo, 1, 5);
     Object.assign(ws.getCell(fTitulo, 1), {
@@ -199,7 +197,7 @@ async function excelTalonarios({ empresa, resultado, logo }) {
     unir(fNombre, 1, 3);
     unir(fNombre, 4, 5);
     Object.assign(ws.getCell(fNombre, 1), { value: tal.nombre, font: { bold: true, size: 12 }, alignment: { vertical: 'middle' } });
-    Object.assign(ws.getCell(fNombre, 4), { value: `CÉDULA ${tal.cedula}`, font: { size: 10, color: { argb: 'FF52646B' } }, alignment: { horizontal: 'right', vertical: 'middle' } });
+    Object.assign(ws.getCell(fNombre, 4), { value: `CÉDULA ${tal.cedula}`, font: { bold: true, size: 12 }, alignment: { horizontal: 'right', vertical: 'middle' } });
     if (tal.correo) {
       const f = fila();
       unir(f, 1, 5);
