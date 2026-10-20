@@ -38,6 +38,15 @@ function crearApp({ store, auth }) {
     auth.iniciar(res, req.body.usuario);
     return res.redirect('/');
   });
+  // ENCARGA abre /sso?token=... con un token de un solo uso; aquí se crea la sesión sin pedir clave.
+  app.get('/sso', (req, res) => {
+    res.set('Referrer-Policy', 'no-referrer');
+    if (!auth.encarga) return res.status(404).send(V.errorPagina('La entrada desde ENCARGA no está configurada.'));
+    const t = auth.entrarConEncarga(req.query.token);
+    if (!t) return res.redirect('/login?error=' + encodeURIComponent('El enlace de ENCARGA no es válido o ya venció. Vuelve a abrirlo desde ENCARGA.'));
+    auth.iniciar(res, t.usuario);
+    return res.redirect(t.ir);
+  });
   app.post('/logout', (req, res) => { auth.cerrar(res); res.redirect('/login'); });
 
   app.use(auth.requerir);

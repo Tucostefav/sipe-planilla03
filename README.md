@@ -60,6 +60,7 @@ Si no hay `DB_HOST`, los datos se guardan en archivos JSON dentro de `data/`. Es
    - `APP_USUARIO`, `APP_CLAVE`: el usuario y la clave para entrar
    - `SESSION_SECRET`: un texto largo y aleatorio
    - `NODE_ENV=production`
+   - `ENCARGA_SECRET` (opcional): la clave compartida para entrar desde ENCARGA sin clave. Los pasos están en [docs/ENCARGA.md](docs/ENCARGA.md).
    - `DB_HOST`, `DB_PORT` (3306), `DB_USER`, `DB_PASSWORD`, `DB_NAME`: los de la base de datos del paso 1
 5. Despliega. La tabla `documentos` se crea sola la primera vez. Cada push a `main` vuelve a desplegar, y los datos quedan en MySQL.
 
