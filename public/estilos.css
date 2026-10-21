@@ -362,3 +362,12 @@ input[type="color"] { width: 44px; height: 32px; padding: 2px; border-radius: 6p
 .muestras span { width: 28px; height: 14px; border-radius: 3px; border: 1px solid var(--linea); }
 .marca-form .boton { align-self: flex-start; }
 .logo-vista[hidden] { display: none; }
+
+/* Cesantías: datos que se escriben a mano dentro de la tabla. */
+.tabla-ces td input.corto { width: 4.6em; min-width: 0; }
+.tabla-ces td input.medio { width: 9em; min-width: 0; }
+.tabla-ces td input[type="date"] { width: 10.5em; min-width: 0; }
+.tabla-ces td select { min-width: 4.2em; }
+.pestanas a.sin-datos { opacity: .6; }
+.ces-encabezado .rejilla-form { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+@media (max-width: 520px) { .pestanas .largo { display: none; } }
