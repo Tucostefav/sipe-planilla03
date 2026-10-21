@@ -7,10 +7,12 @@ const { construirInforme03 } = require('./informe03');
 const { construirPlanilla03 } = require('./planilla03');
 const { construirTalonarios, limpiarConceptos } = require('./talonarios');
 const { prepararLogo } = require('./logo');
+const { construirCesantias, limpiarDatosCesantias, periodosTrimestre } = require('./cesantias');
 
 // Colecciones: empresas (id = RUC), detalles (id = RUC|AAAAMM), empleados (id = cédula),
 // talonarios (id = RUC|cédula: correo y descuentos o adicionales fijos de cada empleado),
-// logos (id = RUC: logo PNG sin fondo para los talonarios; aparte para no cargarlo con la empresa).
+// logos (id = RUC: logo PNG sin fondo para los talonarios; aparte para no cargarlo con la empresa),
+// cesantias (id = RUC|cédula: # asignado, seguro social, edad, sexo y fecha de ingreso, escritos a mano).
 class Servicio {
   constructor(store) {
     this.store = store;
@@ -86,6 +88,31 @@ class Servicio {
     if (!empresa || !detalle) return null;
     const porCedula = new Map(ajustes.map((a) => [a.cedula, a]));
     return { empresa, detalle, logo, resultado: construirTalonarios(detalle, { modo, ajustes: (c) => porCedula.get(c) || null }) };
+  }
+
+  /** Reporte de cesantías de un trimestre; trimestres dice cuáles del año tienen algún mes cargado. */
+  async cesantias(ruc, anio, trimestre) {
+    const [empresa, detalles, datos] = await Promise.all([this.empresa(ruc), this.listarDetalles(ruc), this.store.list('cesantias', `${ruc}|`)]);
+    if (!empresa) return null;
+    const delAnio = detalles.filter((d) => String(d.periodo).startsWith(String(anio)));
+    const cargados = new Set(delAnio.map((d) => String(d.periodo)));
+    const porCedula = new Map(datos.map((d) => [d.cedula, d]));
+    const armar = (t) => construirCesantias({ anio, trimestre: t, detalles: delAnio, datos: (c) => porCedula.get(c) || null });
+    const trimestres = [1, 2, 3, 4].filter((t) => periodosTrimestre(anio, t).some((p) => cargados.has(p)));
+    return { empresa, trimestres, resultado: trimestre ? armar(trimestre) : null, armar };
+  }
+
+  /** Guarda lo que se escribe a mano en el reporte de cesantías y los datos del encabezado. */
+  async guardarDatosCesantias(ruc, { encabezado, filas }) {
+    const docs = filas.filter((f) => f.cedula).map((f) => {
+      const cedula = String(f.cedula).trim().toUpperCase();
+      return [`${ruc}|${cedula}`, { ruc, cedula, ...limpiarDatosCesantias(f) }];
+    });
+    if (docs.length) await this.store.putMany('cesantias', docs);
+    if (encabezado) {
+      const t = (v) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      await this.guardarEmpresa(ruc, { cesNombre: t(encabezado.cesNombre), cesContacto: t(encabezado.cesContacto), cesTelefono: t(encabezado.cesTelefono) });
+    }
   }
 
   /** Logo PNG de la empresa (Buffer) o null. */

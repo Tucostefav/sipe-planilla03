@@ -16,6 +16,7 @@ Los dos reportes se ven en pantalla y se pueden descargar en Excel.
    - En **Empleados → Importar**, sube un Informe 03 o una Planilla 03 de antes. Se llena solo.
    - Si aparece alguien nuevo, el sistema lo pide después de subir el detalle.
 5. Abre el **Informe 03** del mes o la **Planilla 03** del año y descárgalos.
+6. **Cesantías** (en la página de la empresa): es el reporte de cada trimestre para el fondo PROGRESO. Toma el salario de los tres meses del detalle de la CSS. El # asignado, el seguro social, la edad, el sexo y la fecha de ingreso se escriben a mano una vez y se guardan. Se descarga en Excel con el formato del fondo.
 
 ## Reglas de cálculo
 
@@ -71,6 +72,7 @@ server.js                 arranque
 src/parseDetalleCSS.js    lee el detalle de planilla de la CSS
 src/informe03.js          cálculo y Excel del Informe 03 (formato DGI)
 src/planilla03.js         cálculo y Excel de la Planilla 03 anual
+src/cesantias.js          reporte trimestral al fondo de cesantías (cálculo y Excel)
 src/servicio.js           empresas, meses cargados y maestro de empleados
 src/store/                guardado en MySQL o en archivos JSON
 src/app.js, src/views.js  pantallas

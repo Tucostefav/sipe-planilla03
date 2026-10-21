@@ -4,6 +4,7 @@ const { escapeHtml: h, nombreMes, MESES, rucDGI } = require('./util');
 const { COLUMNAS } = require('./informe03');
 const { MESES_MAYUS, MESES_CORTOS } = require('./planilla03');
 const { MODOS, nombreEmpresaTalonario, coloresTalonario } = require('./talonarios');
+const { ORDINAL, tituloTrimestre, nombreEmpresaCesantias, trimestreDePeriodo } = require('./cesantias');
 
 const fmt = (n) => (n === null || n === undefined || n === '' ? '' : Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const enc = encodeURIComponent;
@@ -238,7 +239,8 @@ function empresaPagina({ empresa, detalles, usuario, aviso }) {
 ${panelMarca(empresa)}
 ${anios.map((a) => `<section class="anio">
 <div class="titulo-seccion"><h2>${a}</h2><span class="contador">${plural(periodos.filter((p) => anioDe(p) === a).length, 'mes', 'meses')}</span>
-<a class="boton secundario" href="${base}/planilla03/${a}">Planilla 03 ${a}</a></div>
+<a class="boton secundario" href="${base}/planilla03/${a}">Planilla 03 ${a}</a>
+<a class="boton secundario" href="${base}/cesantias/${a}">Cesantías ${a}</a></div>
 ${tiraMeses(a, periodos, (p) => `${base}/informe03/${p}`, { grande: true })}
 </section>`).join('') || '<p class="vacio">Sin meses cargados. Sube el detalle de planilla abajo.</p>'}
 ${detalles.length ? `<h2>Meses cargados</h2>
@@ -293,7 +295,8 @@ function informe03Pagina({ empresa, detalle, filas, avisos, cuadres: cs, totales
 <p class="subtitulo">${h(empresa.razonSocial)} · ${plural(filas.length, 'empleado', 'empleados')}</p>
 <div class="botones"><a class="boton" href="${base}/informe03/${detalle.periodo}/excel">Descargar Excel para la DGI</a>
 <a class="boton secundario" href="${base}/planilla03/${anioDe(detalle.periodo)}">Planilla 03 ${anioDe(detalle.periodo)}</a>
-<a class="boton secundario" href="${base}/talonarios/${detalle.periodo}">Talonarios</a></div></div>
+<a class="boton secundario" href="${base}/talonarios/${detalle.periodo}">Talonarios</a>
+<a class="boton secundario" href="${base}/cesantias/${anioDe(detalle.periodo)}/${trimestreDePeriodo(detalle.periodo)}">Cesantías</a></div></div>
 ${sello(cs, { compacto: true })}
 </section>
 ${cuadres(cs)}
@@ -408,6 +411,51 @@ ${empresa.logo ? '' : `<p class="nota">Sin logo. <a href="${base}#marca">Súbelo
 <div class="talonarios" style="--t-principal:${h(principal)};--t-acento:${h(secundario)}">${ts.map(tarjeta).join('')}</div>`, { usuario, aviso, error, seccion: 'empresas' });
 }
 
+// Reporte trimestral al fondo de cesantías: salarios del detalle CSS y los datos que se escriben a mano.
+function cesantiasPagina({ empresa, resultado, trimestres, usuario, aviso, error }) {
+  const base = `/empresa/${enc(empresa.ruc)}`;
+  const { anio, trimestre, filas, totales: t } = resultado;
+  const url = `${base}/cesantias/${anio}`;
+  const sexo = (v, i) => `<select name="sexo_${i}" form="ces" aria-label="Sexo">${['', 'M', 'F'].map((o) => `<option value="${o}"${v === o ? ' selected' : ''}>${o || '—'}</option>`).join('')}${v && !['M', 'F'].includes(v) ? `<option selected>${h(v)}</option>` : ''}</select>`;
+  const n = (v) => `<td class="n${v ? '' : ' cero'}">${fmt(v)}</td>`;
+  return layout(`Cesantías ${resultado.titulo}`, `
+<p class="migas"><a href="/">Empresas</a> / <a href="${base}">${h(empresa.razonSocial)}</a></p>
+<section class="cabecera-informe">
+<div><p class="ceja">Fondo de cesantías · PROGRESO</p><h1>${h(resultado.titulo.charAt(0).toUpperCase() + resultado.titulo.slice(1))}</h1>
+<p class="subtitulo">${h(empresa.razonSocial)} · ${plural(filas.length, 'empleado', 'empleados')} · total a pagar B/. ${fmt(t.total)}</p>
+<nav class="pestanas" aria-label="Trimestre">${[1, 2, 3, 4].map((k) => `<a href="${url}/${k}"${k === trimestre ? ' aria-current="page"' : ''}${trimestres.includes(k) ? '' : ' class="sin-datos"'}>${ORDINAL[k - 1]}<span class="largo"> trimestre</span></a>`).join('')}</nav>
+<div class="botones"><a class="boton" href="${url}/${trimestre}/excel">Descargar Excel</a>
+${trimestres.length > 1 ? `<a class="boton secundario" href="${url}/excel">Descargar el año (${plural(trimestres.length, 'hoja', 'hojas')})</a>` : ''}</div>
+<p class="nota">Salario de cada mes del detalle de la CSS. Base: el mayor entre el promedio y el último mes. Prima de antigüedad: base × 1.92% × meses. Indemnización: base × 6.54% × 5% × meses.</p></div>
+</section>
+${listaAvisos(resultado.avisos)}
+<!-- El formulario solo envuelve el encabezado; los campos de la tabla se unen con form="ces"
+     para que el filtro de la tabla quede fuera y no bloquee el envío. -->
+<form method="post" action="${url}/${trimestre}/datos" id="ces">
+<input type="hidden" name="filas" value="${filas.length}">
+<section class="panel ces-encabezado"><h2>Encabezado del reporte</h2>
+<div class="rejilla-form">
+<label>Empresa <input name="cesNombre" value="${h(empresa.cesNombre || '')}" placeholder="${h(nombreEmpresaCesantias({ ...empresa, cesNombre: '' }))}" autocomplete="off"></label>
+<label>Contacto <input name="cesContacto" value="${h(empresa.cesContacto || '')}" autocomplete="off"></label>
+<label>Teléfono <input name="cesTelefono" value="${h(empresa.cesTelefono || '')}" inputmode="tel" autocomplete="off"></label>
+</div></section></form>
+<div class="titulo-seccion"><h2>Empleados</h2><span class="contador">${filas.length}</span>
+<input type="search" class="filtro" placeholder="Filtrar por cédula o nombre" data-filtro="#tabla-ces" aria-label="Filtrar empleados"></div>
+${filas.length ? `<p class="nota">El # asignado, el seguro social, la edad, el sexo y la fecha de ingreso se escriben aquí y quedan guardados para los demás trimestres.</p>
+<div class="scroll alto"><table class="tabla-ces" id="tabla-ces"><thead><tr>
+<th># asignado</th><th>Nombre</th><th>Apellido</th><th>Cédula</th><th>Seguro social</th><th>Edad</th><th>Sexo</th><th>Fecha de ingreso</th>
+${resultado.periodos.map((p) => `<th class="n">${h(nombreMes(p).split(' ')[0])}</th>`).join('')}<th class="n">Promedio</th><th class="n">Base</th><th class="n">Meses</th><th class="n">Prima antig.</th><th class="n">Indemniz.</th><th class="n">Total</th></tr></thead><tbody>
+${filas.map((f, i) => `<tr><td><input type="hidden" name="cedula_${i}" value="${h(f.cedula)}" form="ces"><input name="numero_${i}" value="${h(f.numero)}" form="ces" class="corto" aria-label="# asignado de ${h(f.cedula)}"></td>
+<td>${h(f.nombre)}</td><td>${h(f.apellido)}</td><td class="mono">${h(f.cedula)}</td>
+<td><input name="seguroSocial_${i}" value="${h(f.seguroSocial)}" form="ces" class="mono medio" aria-label="Seguro social de ${h(f.cedula)}"></td>
+<td><input name="edad_${i}" value="${h(f.edad)}" form="ces" inputmode="numeric" maxlength="3" class="corto" aria-label="Edad de ${h(f.cedula)}"></td>
+<td>${sexo(f.sexo, i)}</td>
+<td><input type="date" name="fechaIngreso_${i}" value="${h(f.fechaIngreso)}" form="ces" aria-label="Fecha de ingreso de ${h(f.cedula)}"></td>
+${f.salarios.map(n).join('')}${n(f.promedio)}${n(f.base)}<td class="n">${f.meses}</td>${n(f.prima)}${n(f.indemnizacion)}<td class="n fuerte">${fmt(f.total)}</td></tr>`).join('')}
+</tbody><tfoot><tr class="tot"><td colspan="8">Total global de aporte de la empresa</td>${t.salarios.map(n).join('')}${n(t.promedio)}${n(t.base)}<td></td>${n(t.prima)}${n(t.indemnizacion)}<td class="n fuerte">${fmt(t.total)}</td></tr></tfoot></table></div>` : '<p class="vacio">No hay meses cargados en este trimestre. Sube el detalle de planilla de la CSS de esos meses.</p>'}
+<div class="botones"><button class="boton" form="ces">Guardar datos</button></div>`, { usuario, aviso, error, seccion: 'empresas' });
+}
+
 function empleadosPagina({ empleados, usuario, aviso, error, q }) {
   return layout('Empleados', `
 <section class="cabecera-empresa">
@@ -441,4 +489,4 @@ function errorPagina(mensaje, usuario) {
   return layout('Error', `<section class="panel"><h1>No se pudo completar</h1><p class="aviso-error">${h(mensaje)}</p><p><a class="boton secundario" href="/">Volver a empresas</a></p></section>`, { usuario });
 }
 
-module.exports = { login, inicio, resultadoCarga, resultadoLote, empresaPagina, informe03Pagina, planilla03Pagina, talonariosPagina, empleadosPagina, errorPagina };
+module.exports = { login, inicio, resultadoCarga, resultadoLote, empresaPagina, informe03Pagina, planilla03Pagina, talonariosPagina, cesantiasPagina, empleadosPagina, errorPagina };

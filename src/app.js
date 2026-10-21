@@ -8,6 +8,7 @@ const { Servicio } = require('./servicio');
 const { rucDGI } = require('./util');
 const { excelInforme03, nombreArchivoInforme03 } = require('./informe03');
 const { excelPlanilla03, nombreArchivoPlanilla03 } = require('./planilla03');
+const { excelCesantias, nombreArchivoCesantias, trimestreValido } = require('./cesantias');
 const { excelTalonarios, pdfTalonarios, zipTalonarios, nombreArchivoTalonario, nombreArchivoTalonarios, modoValido } = require('./talonarios');
 
 const MAX_ARCHIVOS = 36;
@@ -198,6 +199,56 @@ function crearApp({ store, auth }) {
     if (!t) return res.sendStatus(404);
     const buf = await zipTalonarios(t);
     res.attachment(nombreArchivoTalonarios(rucDGI(t.empresa), t.detalle.periodo, modo, 'zip')).type('application/zip').send(buf);
+  }));
+
+  // Cesantías: reporte trimestral al fondo. Sin trimestre abre el último del año que tenga meses.
+  const anioValido = (a) => (/^20\d\d$/.test(String(a)) ? String(a) : null);
+  app.get('/empresa/:ruc/cesantias/:anio', envolver(async (req, res) => {
+    const anio = anioValido(req.params.anio);
+    const c = anio && await svc.cesantias(req.params.ruc, anio);
+    if (!c) return res.status(404).send(V.errorPagina('Empresa no encontrada.', req.usuario));
+    res.redirect(`/empresa/${encodeURIComponent(req.params.ruc)}/cesantias/${anio}/${c.trimestres[c.trimestres.length - 1] || 1}`);
+  }));
+
+  // El año completo: una hoja por cada trimestre que tenga algún mes cargado.
+  app.get('/empresa/:ruc/cesantias/:anio/excel', envolver(async (req, res) => {
+    const anio = anioValido(req.params.anio);
+    const c = anio && await svc.cesantias(req.params.ruc, anio);
+    if (!c || !c.trimestres.length) return res.sendStatus(404);
+    const buf = await excelCesantias({ empresa: c.empresa, trimestres: c.trimestres.map(c.armar) });
+    res.attachment(nombreArchivoCesantias(rucDGI(c.empresa), anio)).type(XLSX_MIME).send(Buffer.from(buf));
+  }));
+
+  app.get('/empresa/:ruc/cesantias/:anio/:t', envolver(async (req, res) => {
+    const anio = anioValido(req.params.anio);
+    const t = trimestreValido(req.params.t);
+    const c = anio && t && await svc.cesantias(req.params.ruc, anio, t);
+    if (!c) return res.status(404).send(V.errorPagina('Empresa no encontrada.', req.usuario));
+    res.send(V.cesantiasPagina({ ...c, usuario: req.usuario, ...flash(req) }));
+  }));
+
+  app.get('/empresa/:ruc/cesantias/:anio/:t/excel', envolver(async (req, res) => {
+    const anio = anioValido(req.params.anio);
+    const t = trimestreValido(req.params.t);
+    const c = anio && t && await svc.cesantias(req.params.ruc, anio, t);
+    if (!c) return res.sendStatus(404);
+    const buf = await excelCesantias({ empresa: c.empresa, trimestres: [c.resultado] });
+    res.attachment(nombreArchivoCesantias(rucDGI(c.empresa), anio, t)).type(XLSX_MIME).send(Buffer.from(buf));
+  }));
+
+  app.post('/empresa/:ruc/cesantias/:anio/:t/datos', envolver(async (req, res) => {
+    const { ruc } = req.params;
+    const anio = anioValido(req.params.anio);
+    const t = trimestreValido(req.params.t);
+    if (!anio || !t || !(await svc.empresa(ruc))) return res.sendStatus(404);
+    const b = req.body;
+    const n = Math.min(Number(b.filas) || 0, 2000);
+    const filas = [];
+    for (let i = 0; i < n; i++) {
+      filas.push({ cedula: b[`cedula_${i}`], numero: b[`numero_${i}`], seguroSocial: b[`seguroSocial_${i}`], edad: b[`edad_${i}`], sexo: b[`sexo_${i}`], fechaIngreso: b[`fechaIngreso_${i}`] });
+    }
+    await svc.guardarDatosCesantias(ruc, { encabezado: { cesNombre: b.cesNombre, cesContacto: b.cesContacto, cesTelefono: b.cesTelefono }, filas });
+    res.redirect(`/empresa/${encodeURIComponent(ruc)}/cesantias/${anio}/${t}?ok=` + encodeURIComponent('Datos guardados. Se usan en todos los trimestres.'));
   }));
 
   app.get('/empresa/:ruc/logo.png', envolver(async (req, res) => {
