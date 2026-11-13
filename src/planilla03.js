@@ -1,7 +1,7 @@
 'use strict';
 
 const ExcelJS = require('exceljs');
-const { round2, compararCedula, MESES, rucDGI } = require('./util');
+const { round2, compararCedula, MESES, rucDGI, norm } = require('./util');
 
 const MESES_MAYUS = MESES.map((m) => m.toUpperCase());
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -45,6 +45,52 @@ function valoresMes(e) {
   };
 }
 
+// Marcas de la Planilla 03: color de la celda del mes y título del comentario.
+const MARCAS = {
+  entrada: { nombre: 'ENTRADA', color: 'FF7030A0', titulo: 'FECHA DE INICIO' },
+  salida: { nombre: 'SALE', color: 'FFFF0000', titulo: 'FECHA FIN' },
+  vacaciones: { nombre: 'VACACIONES', color: 'FF005E00', titulo: 'VACACIONES' },
+};
+// Si en un mes hay varias novedades, el color es el de la primera de esta lista.
+const PRIORIDAD_MARCAS = ['salida', 'entrada', 'vacaciones'];
+
+/** Tipo de novedad de la CSS ("Aviso Entrada", "Vacaciones"...) -> marca de la Planilla 03. */
+function clasificarNovedad(tipo) {
+  const n = norm(tipo);
+  if (n.includes('vacacion')) return 'vacaciones';
+  if (/salida|terminacion|retiro|renuncia|despido|baja|cese/.test(n)) return 'salida';
+  if (/entrada|ingreso|reintegro/.test(n)) return 'entrada';
+  return null;
+}
+
+function textoMarca(m) {
+  const fecha = m.tipo === 'vacaciones' && m.fin ? `${m.inicio} al ${m.fin}` : m.inicio || m.fin;
+  return `${MARCAS[m.tipo].titulo}:\n${fecha || 'sin fecha en el detalle'}`;
+}
+
+/**
+ * Marcas de entrada, salida y vacaciones de cada mes, con el texto del comentario.
+ * Vienen de las novedades del detalle de la CSS. Si la CSS no trae la entrada o la salida,
+ * se deduce cuando el empleado aparece o deja de aparecer entre dos meses cargados.
+ */
+function marcasEmpleado(f, novedades, mesesCargados) {
+  return f.meses.map((v, i) => {
+    const lista = (novedades[i] || []).map((n) => ({ tipo: clasificarNovedad(n.tipo), inicio: n.inicio, fin: n.fin })).filter((m) => m.tipo);
+    if (v && i > 0 && mesesCargados[i - 1] && !f.meses[i - 1] && !lista.some((m) => m.tipo === 'entrada')) {
+      lista.push({ tipo: 'entrada', deducida: true });
+    }
+    if (v && i < 11 && mesesCargados[i + 1] && !f.meses[i + 1] && !lista.some((m) => m.tipo === 'salida')) {
+      lista.push({ tipo: 'salida', deducida: true });
+    }
+    if (!lista.length) return null;
+    lista.sort((a, b) => PRIORIDAD_MARCAS.indexOf(a.tipo) - PRIORIDAD_MARCAS.indexOf(b.tipo));
+    const textos = lista.map((m) => (m.deducida
+      ? `${MARCAS[m.tipo].titulo}:\nNo viene en el detalle de la CSS. ${m.tipo === 'entrada' ? `Primer mes con salario después de ${MESES[i - 1]}.` : `Último mes con salario; no aparece en ${MESES[i + 1]}.`}`
+      : textoMarca(m)));
+    return { tipo: lista[0].tipo, tipos: [...new Set(lista.map((m) => m.tipo))], comentario: [...new Set(textos)].join('\n\n') };
+  });
+}
+
 /**
  * Arma la Planilla 03 de un año con todos los detalles de la CSS cargados para esa empresa.
  * @param {object[]} detalles detalles del año (cualquier orden)
@@ -59,15 +105,19 @@ function construirPlanilla03({ anio, detalles, buscarEmpleado }) {
       const m = buscarEmpleado(e.cedula);
       let f = porCedula.get(e.cedula);
       if (!f) {
-        f = { cedula: e.cedula, nombre: (m && m.nombreCompleto) || `${e.nombre} ${e.apellido}`.trim(), dv: m && m.dv !== '' && m.dv !== undefined ? m.dv : '', enMaestro: !!m, meses: Array(12).fill(null) };
+        f = { cedula: e.cedula, nombre: (m && m.nombreCompleto) || `${e.nombre} ${e.apellido}`.trim(), dv: m && m.dv !== '' && m.dv !== undefined ? m.dv : '', enMaestro: !!m, meses: Array(12).fill(null), novedades: Array(12).fill(null) };
         porCedula.set(e.cedula, f);
       }
       f.meses[i] = valoresMes(e);
+      f.novedades[i] = e.novedades || [];
     }
   }
 
   const filas = [...porCedula.values()].sort((a, b) => compararCedula(a.cedula, b.cedula));
+  const mesesCargados = meses.map((m) => !!m);
   for (const f of filas) {
+    f.marcas = marcasEmpleado(f, f.novedades, mesesCargados);
+    delete f.novedades;
     f.total = round2(f.meses.reduce((s, v) => s + (v ? v.mes + v.pp + v.xiii : 0), 0));
     f.isrEstimado = isrAnual(f.total);
     f.isrRetenido = round2(f.meses.reduce((s, v) => s + (v ? v.isr : 0), 0));
@@ -112,7 +162,7 @@ function construirPlanilla03({ anio, detalles, buscarEmpleado }) {
     return r;
   });
 
-  return { anio, filas, resumen, mesesCargados: meses.map((m) => !!m) };
+  return { anio, filas, resumen, mesesCargados };
 }
 
 const colLetra = (n) => {
@@ -144,12 +194,19 @@ async function excelPlanilla03({ empresa, planilla }) {
   const cIsrRet = cIsrMes(11) + 1;
   const cPend = cIsrRet + 1;
   const L = colLetra;
+  const relleno = (argb) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
 
   ws.getCell('A1').value = `${empresa.razonSocial || empresa.ruc} ${planilla.anio}`;
   ws.getCell('A1').style = { font: { ...f11, size: 12, bold: true, color: { argb: 'FFFF0000' } }, alignment: { horizontal: 'center' } };
   ws.mergeCells('A1:C1');
   ws.getCell('A2').value = 'NO. PATRONAL ';
   ws.getCell('C2').value = empresa.patronal || '';
+  // Leyenda de colores, como en el Excel de la empresa: G2 ENTRADA, H2 SALE, I2:J2 VACACIONES.
+  [['G2', 'entrada'], ['H2', 'salida'], ['I2', 'vacaciones']].forEach(([dir, tipo]) => {
+    ws.getCell(dir).value = MARCAS[tipo].nombre;
+    ws.getCell(dir).style = { font: { ...f11, bold: true, color: { theme: 0 } }, fill: relleno(MARCAS[tipo].color), alignment: { horizontal: 'center' } };
+  });
+  ws.mergeCells('I2:J2');
   ws.getCell('A3').value = 'RUC';
   ws.getCell('C3').value = rucDGI(empresa);
 
@@ -185,6 +242,12 @@ async function excelPlanilla03({ empresa, planilla }) {
       row.getCell(cIsrMes(i)).value = v.isr;
     });
     for (let c = 4; c < cTotal; c++) row.getCell(c).numFmt = num;
+    f.marcas.forEach((m, i) => {
+      if (!m) return;
+      const cell = row.getCell(colMes(i, 0));
+      cell.style = { font: { ...f11, color: { theme: 0 } }, fill: relleno(MARCAS[m.tipo].color), numFmt: num };
+      cell.note = { texts: [{ font: { size: 9, name: 'Tahoma', family: 2 }, text: m.comentario }] };
+    });
     const sumaMeses = MESES.map((_, i) => `${L(colMes(i, 0))}${r}+${L(colMes(i, 1))}${r}+${L(colMes(i, 3))}${r}`).join('+');
     row.getCell(cTotal).value = { formula: sumaMeses, result: f.total };
     row.getCell(cTotal).style = { ...encab, font: f11, numFmt: num };
@@ -245,4 +308,4 @@ function nombreArchivoPlanilla03(empresa, anio) {
   return `Planilla_03_${nombre}_${anio}.xlsx`;
 }
 
-module.exports = { construirPlanilla03, excelPlanilla03, nombreArchivoPlanilla03, valoresMes, isrAnual, tasas, MESES_MAYUS, MESES_CORTOS };
+module.exports = { construirPlanilla03, clasificarNovedad, MARCAS, excelPlanilla03, nombreArchivoPlanilla03, valoresMes, isrAnual, tasas, MESES_MAYUS, MESES_CORTOS };

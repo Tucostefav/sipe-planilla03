@@ -8,7 +8,7 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const { parseDetalleCSS } = require('../src/parseDetalleCSS');
 const { construirInforme03, excelInforme03, COLUMNAS } = require('../src/informe03');
-const { construirPlanilla03, excelPlanilla03, isrAnual } = require('../src/planilla03');
+const { construirPlanilla03, excelPlanilla03, isrAnual, clasificarNovedad } = require('../src/planilla03');
 const { construirTalonarios, excelTalonarios, pdfTalonarios } = require('../src/talonarios');
 const { periodoDesdeTexto, round2 } = require('../src/util');
 const { FileStore } = require('../src/store/fileStore');
@@ -151,6 +151,43 @@ test('Planilla 03: columnas del mes, PP SS y acumulado anual', async () => {
   const ws = wb.getWorksheet('Planilla03');
   assert.equal(ws.getCell('A5').value, 'NOMBRE');
   assert.equal(ws.getCell('B6').value, '2-700-800');
+});
+
+test('Planilla 03: colores y comentarios de entrada, salida y vacaciones', async () => {
+  const ago = await parseDetalleCSS(FIXTURE);
+  const jul = JSON.parse(JSON.stringify(ago));
+  jul.periodo = '202607';
+  jul.empleados = jul.empleados.filter((e) => e.cedula !== '2-700-800').map((e) => ({ ...e, novedades: [] }));
+  // En septiembre Juan sale con aviso de la CSS y Ana ya no aparece (salida sin aviso).
+  const sep = JSON.parse(JSON.stringify(ago));
+  sep.periodo = '202609';
+  sep.empleados = sep.empleados.filter((e) => e.cedula !== '4-50-60').map((e) => ({ ...e, novedades: [] }));
+  sep.empleados.find((e) => e.cedula === '8-100-200').novedades = [{ tipo: 'Aviso Salida', inicio: '15 de septiembre de 2026', fin: '' }];
+  const p = construirPlanilla03({ anio: 2026, detalles: [jul, ago, sep], buscarEmpleado: () => null });
+  const fila = (c) => p.filas.find((f) => f.cedula === c);
+
+  assert.deepEqual(fila('2-700-800').marcas[7], { tipo: 'entrada', tipos: ['entrada'], comentario: 'FECHA DE INICIO:\n1 de agosto de 2026' });
+  assert.equal(fila('4-50-60').marcas[7].tipo, 'salida', 'no aparece en septiembre');
+  assert.deepEqual(fila('4-50-60').marcas[7].tipos, ['salida', 'vacaciones']);
+  assert.match(fila('4-50-60').marcas[7].comentario, /VACACIONES:\n1 de agosto de 2026 al 30 de agosto de 2026/);
+  assert.match(fila('4-50-60').marcas[7].comentario, /no aparece en septiembre/);
+  assert.equal(fila('8-100-200').marcas[8].comentario, 'FECHA FIN:\n15 de septiembre de 2026');
+  assert.equal(fila('8-100-200').marcas[6], null, 'julio es el primer mes cargado: no se deduce entrada');
+
+  assert.equal(clasificarNovedad('Aviso Entrada'), 'entrada');
+  assert.equal(clasificarNovedad('Vacaciones'), 'vacaciones');
+  assert.equal(clasificarNovedad('Aviso de Terminación'), 'salida');
+  assert.equal(clasificarNovedad('Incapacidad'), null);
+
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await excelPlanilla03({ empresa: ago.empresa, planilla: p }));
+  const ws = wb.getWorksheet('Planilla03');
+  assert.deepEqual([ws.getCell('G2').value, ws.getCell('H2').value, ws.getCell('I2').value], ['ENTRADA', 'SALE', 'VACACIONES']);
+  const r = 6 + p.filas.indexOf(fila('2-700-800'));
+  const celda = ws.getCell(r, 4 + 7 * 4); // MES de agosto
+  assert.equal(celda.fill.fgColor.argb, 'FF7030A0');
+  assert.match(JSON.stringify(celda.note), /FECHA DE INICIO:\\n1 de agosto de 2026/);
+  assert.equal(ws.getCell(r, 4 + 8 * 4).note, undefined);
 });
 
 test('Planilla 03: el gasto de representación no paga seguro educativo', () => {
