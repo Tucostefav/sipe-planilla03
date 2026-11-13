@@ -37,6 +37,8 @@ Los dos reportes se ven en pantalla y se pueden descargar en Excel.
 
 En la Planilla 03, la columna de salario del mes es lo que constituye salario sin la prima (sueldo, vacaciones, etc.). PP es la prima de producción y PP SS es la parte de la prima que pasa del 50% del salario. Para las cuotas se usan estas tasas: SS patronal 13.25% (12.25% antes de abril de 2025), SS XIII patronal 10.75%, SE patronal 1.5%, riesgo profesional según la tasa del detalle, SS empleado 9.75%, SS XIII empleado 7.25% y SE empleado 1.25%. Al final se compara contra el total del detalle de la CSS. El ISR anual estimado usa los tramos 0% / 15% / 25%.
 
+La celda del salario del mes se pinta cuando el empleado entra (morado), sale (rojo) o sale de vacaciones (verde), con un comentario que dice la fecha. Los datos salen de la sección "Tipo Novedad" del detalle de la CSS. Si la CSS no trae la entrada o la salida, se deduce cuando el empleado aparece o deja de aparecer entre dos meses cargados, y el comentario lo dice.
+
 ## Instalación local
 
 ```bash

@@ -332,12 +332,18 @@ ${tiraMeses(planilla.anio, periodos, (p) => `${base}/informe03/${p}`, { grande: 
 </section>
 <div class="titulo-seccion"><h2>Empleados</h2>
 <input type="search" class="filtro" placeholder="Filtrar por cédula o nombre" data-filtro="#tabla-planilla" aria-label="Filtrar empleados"></div>
+<p class="leyenda-marcas"><span class="marca-entrada">Entrada</span><span class="marca-salida">Sale</span><span class="marca-vacaciones">Vacaciones</span> Pasa el cursor sobre un mes marcado para ver la fecha.</p>
 <div class="scroll alto"><table class="planilla" id="tabla-planilla"><thead>
 <tr><th rowspan="2" class="fija">Nombre</th><th rowspan="2">Identificación</th><th rowspan="2">DV</th>
 ${idx.map((i) => `<th colspan="4" class="mes-grupo">${MESES_MAYUS[i]}</th>`).join('')}<th rowspan="2" class="n">Totales</th><th rowspan="2" class="n">ISR anual est.</th><th rowspan="2" class="n">ISR retenido</th><th rowspan="2" class="n">Pend x desc</th></tr>
 <tr>${idx.map(() => '<th class="n mes-grupo">Salario</th><th class="n">PP</th><th class="n">PP SS</th><th class="n">XIII</th>').join('')}</tr></thead><tbody>
 ${planilla.filas.map((f) => `<tr><td class="fija">${h(f.nombre)}${f.enMaestro ? '' : ' <span class="chip ambar" title="No está en el maestro de empleados">sin maestro</span>'}</td><td class="mono">${h(f.cedula)}</td><td>${h(f.dv)}</td>
-${idx.map((i) => { const v = f.meses[i]; return v ? [v.mes, v.pp, v.ppSS, v.xiii].map((x, j) => `<td class="n${x ? '' : ' cero'}${j === 0 ? ' mes-grupo' : ''}">${fmt(x)}</td>`).join('') : '<td class="mes-grupo"></td><td></td><td></td><td></td>'; }).join('')}
+${idx.map((i) => {
+    const v = f.meses[i];
+    const m = f.marcas && f.marcas[i];
+    const marca = m ? ` marca-${m.tipo}" title="${h(m.comentario)}` : '';
+    return v ? [v.mes, v.pp, v.ppSS, v.xiii].map((x, j) => `<td class="n${x ? '' : ' cero'}${j === 0 ? ` mes-grupo${marca}` : ''}">${fmt(x)}</td>`).join('') : '<td class="mes-grupo"></td><td></td><td></td><td></td>';
+  }).join('')}
 <td class="n fuerte">${fmt(f.total)}</td><td class="n">${fmt(f.isrEstimado)}</td><td class="n">${fmt(f.isrRetenido)}</td><td class="n${f.pendiente ? ' alerta' : ' cero'}">${fmt(f.pendiente)}</td></tr>`).join('')}
 </tbody></table></div>
 <h2>Cuotas a la CSS por mes</h2>

@@ -371,3 +371,11 @@ input[type="color"] { width: 44px; height: 32px; padding: 2px; border-radius: 6p
 .pestanas a.sin-datos { opacity: .6; }
 .ces-encabezado .rejilla-form { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
 @media (max-width: 520px) { .pestanas .largo { display: none; } }
+
+/* Marcas de la Planilla 03: mismos colores que el Excel (entrada, salida, vacaciones) */
+table.planilla td.marca-entrada, table.planilla td.marca-salida, table.planilla td.marca-vacaciones { color: #fff; cursor: help; }
+.marca-entrada { background: #7030a0; }
+.marca-salida { background: #ff0000; }
+.marca-vacaciones { background: #005e00; }
+.leyenda-marcas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .85rem; color: var(--tinta-suave); margin: 0 0 10px; }
+.leyenda-marcas span { color: #fff; font-weight: 600; border-radius: 6px; padding: 2px 10px; }
