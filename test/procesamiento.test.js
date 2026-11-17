@@ -149,8 +149,69 @@ test('Planilla 03: columnas del mes, PP SS y acumulado anual', async () => {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf);
   const ws = wb.getWorksheet('Planilla03');
-  assert.equal(ws.getCell('A5').value, 'NOMBRE');
-  assert.equal(ws.getCell('B6').value, '2-700-800');
+  // Estructura del modelo: A cédula, C nombre, desde E el salario de cada mes; sin columna PP SS.
+  assert.equal(ws.getCell('A4').value, 'CEDULA');
+  assert.equal(ws.getCell('C4').value, 'NOMBRE');
+  assert.equal(ws.getCell('A5').value, '2-700-800');
+  const encabezados = ws.getRow(4).values.filter(Boolean);
+  assert.ok(!encabezados.includes('PP SS'));
+  assert.deepEqual(encabezados.slice(0, 4), ['CEDULA', 'NOMBRE', 'Enero', 'Feb']);
+  // Julio y agosto traen prima y XIII: cada uno con su columna PP y XIII.
+  const col = (texto) => { let c = 1; while (ws.getRow(4).getCell(c).value !== texto) c++; return c; };
+  const cAgo = col('Agost');
+  assert.deepEqual([ws.getRow(4).getCell(cAgo + 1).value, ws.getRow(4).getCell(cAgo + 2).value], ['PP', 'XIII']);
+  // Todo lo calculado queda como fórmula.
+  const rJuan = 5 + p.filas.indexOf(juan);
+  const cTot = col('TOTALES');
+  assert.match(ws.getCell(rJuan, cTot).formula, /^SUM\(E\d+:/);
+  assert.equal(ws.getCell(rJuan, cTot).result, 2506.66);
+  assert.match(ws.getCell(rJuan, cTot + 1).formula, /^IF\(/);
+  const rTot = 5 + p.filas.length;
+  assert.equal(ws.getCell(rTot, 3).value, 'Total de salarios');
+  assert.match(ws.getCell(rTot, cAgo).formula, /^SUM\(/);
+  const L = (n) => ws.getColumn(n).letter;
+  const [m, pp] = [L(cAgo), L(cAgo + 1)];
+  assert.equal(ws.getCell(rTot + 2, cAgo).formula,
+    `(${m}${rTot}+SUMPRODUCT((${pp}5:${pp}${rTot - 1}>${m}5:${m}${rTot - 1}/2)*(${pp}5:${pp}${rTot - 1}-${m}5:${m}${rTot - 1}/2)))*$A$${rTot + 2}`);
+  assert.equal(ws.getCell(rTot + 2, 1).value, 0.1325);
+  // Abajo solo queda el total según la CSS (sin "Total calculado" ni "Diferencia"),
+  // y la fórmula da lo mismo que la CSS salvo centavos de redondeo.
+  const rUltima = rTot + 13;
+  assert.equal(ws.getCell(rUltima, 3).value, 'Total según CSS');
+  assert.equal(ws.getCell(rUltima, cAgo).formula, `${m}${rTot + 6}+${m}${rTot + 12}`);
+  assert.ok(Math.abs(ws.getCell(rUltima, cAgo).result - res.total) <= 0.05);
+  assert.equal(ws.rowCount, rUltima);
+  const textos = [];
+  ws.eachRow((row) => row.eachCell((c) => { if (typeof c.value === 'string') textos.push(c.value); }));
+  assert.ok(!textos.some((t) => /Diferencia|Total calculado/.test(t)));
+});
+
+test('Planilla 03: el gasto de representación va en su propia fila con ISR del 10%', async () => {
+  const detalle = {
+    periodo: '202609', empresa: { ruc: '1-1-1', tasaRiesgo: 0.0098 }, totales: {},
+    empleados: [{ cedula: '8-1-1', nombre: 'Ana', apellido: 'Paz', salario: 1200, novedades: [], cuotas: {},
+      componentes: { SUELDO: { reportado: 950, constituyeSalario: 950 }, GASTO_REPRESENTACION: { reportado: 250, constituyeSalario: 250 }, ISR: { reportado: 40.58 } } }],
+  };
+  const p = construirPlanilla03({ anio: 2026, detalles: [detalle], buscarEmpleado: () => null });
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await excelPlanilla03({ empresa: detalle.empresa, planilla: p }));
+  const ws = wb.getWorksheet('Planilla03');
+  assert.deepEqual([ws.getCell('C5').value, ws.getCell('C6').value], ['ANA PAZ', 'ANA PAZ GR']);
+  assert.deepEqual([ws.getCell('E4').value, ws.getCell('F4').value], ['Enero', 'GR']);
+  // Septiembre: U salario, V GR.
+  assert.equal(ws.getCell('U4').value, 'Sept');
+  assert.equal(ws.getCell('U5').value, 950);
+  assert.equal(ws.getCell('V6').value, 250);
+  // ISR: al GR le toca su 10% (25) y el resto (15.58) al salario.
+  assert.equal(ws.getCell('AC4').value, 'TOTALES');
+  assert.match(ws.getCell('AD6').formula, /AC6\*10%/);
+  assert.equal(ws.getCell('AN6').value, 25);
+  assert.equal(ws.getCell('AN5').value, 15.58);
+  assert.equal(ws.getCell('AS5').formula, 'AD5-AR5');
+  // SS y riesgo sobre salario + GR; seguro educativo solo sobre el salario.
+  assert.equal(ws.getCell('U9').formula, '(U7+V7)*$A$9');
+  assert.equal(ws.getCell('U11').formula, 'U7*$A$11');
+  assert.equal(ws.getCell('U20').formula, 'U13+U19');
 });
 
 test('Planilla 03: colores y comentarios de entrada, salida y vacaciones', async () => {
@@ -182,12 +243,15 @@ test('Planilla 03: colores y comentarios de entrada, salida y vacaciones', async
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(await excelPlanilla03({ empresa: ago.empresa, planilla: p }));
   const ws = wb.getWorksheet('Planilla03');
-  assert.deepEqual([ws.getCell('G2').value, ws.getCell('H2').value, ws.getCell('I2').value], ['ENTRADA', 'SALE', 'VACACIONES']);
-  const r = 6 + p.filas.indexOf(fila('2-700-800'));
-  const celda = ws.getCell(r, 4 + 7 * 4); // MES de agosto
+  const col = (texto) => { let c = 1; while (ws.getRow(4).getCell(c).value !== texto) c++; return c; };
+  const cTot = col('TOTALES');
+  assert.deepEqual([-4, -3, -2].map((k) => ws.getRow(1).getCell(cTot + k).value), ['Sale', 'Nuevo', 'Vaca']);
+  const r = 5 + p.filas.indexOf(fila('2-700-800'));
+  const cAgo = col('Agost');
+  const celda = ws.getCell(r, cAgo); // salario de agosto
   assert.equal(celda.fill.fgColor.argb, 'FF7030A0');
   assert.match(JSON.stringify(celda.note), /FECHA DE INICIO:\\n1 de agosto de 2026/);
-  assert.equal(ws.getCell(r, 4 + 8 * 4).note, undefined);
+  assert.equal(ws.getCell(r, col('Sept')).note, undefined);
 });
 
 test('Planilla 03: el gasto de representación no paga seguro educativo', () => {
