@@ -19,9 +19,6 @@ const INGRESOS = [
   ['VIATICOS', 'Viáticos'],
 ];
 
-// ISR del gasto de representación: 10% (hasta 25,000 al año), como en el talonario modelo.
-const TASA_ISR_GR = 0.1;
-
 const MODOS = {
   1: { corto: '1ra quincena', archivo: '1ra-quincena' },
   2: { corto: '2da quincena', archivo: '2da-quincena' },
@@ -88,11 +85,12 @@ function construirTalonarios(detalle, { modo = '1', ajustes = () => null } = {})
     const xiii = modo === '2' ? 0 : comp('DTM');
     const gr = parte(v.gr);
 
-    const isrTotal = comp('ISR');
-    const isrGRMes = Math.min(isrTotal, round2(v.gr * TASA_ISR_GR));
+    // ISR del salario y del gasto de representación, cada uno por separado.
+    const isrSalarioMes = v.isr;
+    const isrGRMes = v.isrGR;
     // Mismas reglas que la CSS: SS sobre todo lo que es salario (con el GR), SE sin el GR.
     const ssSeMes = round2((v.mes + v.ppSS) * t.ssEmpleado) + round2((v.mes - v.gr) * t.seEmpleado);
-    const deducciones = [{ concepto: 'ISR', monto: parte(isrTotal - isrGRMes) }];
+    const deducciones = [{ concepto: 'ISR', monto: parte(isrSalarioMes) }];
     if (v.gr) deducciones.push({ concepto: 'ISR del GR', monto: parte(isrGRMes) });
     for (const c of conceptos.filter((x) => x.tipo === 'descuento')) deducciones.push({ concepto: c.nombre, monto: fijo(c.monto) });
     deducciones.push({ concepto: 'SS y SE de Salario', monto: parte(ssSeMes) });

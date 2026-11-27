@@ -9,6 +9,8 @@ const CONCEPTOS = [
   ['VACACIONES', (n) => n.startsWith('vacacion')],
   ['PRIMA_PRODUCCION', (n) => n.includes('prima') && n.includes('produccion')],
   ['DTM', (n) => n.includes('decimo') || n === 'xiii mes' || n === 'dtm'],
+  // El ISR del gasto de representación va aparte del ISR del salario.
+  ['ISR_GR', (n) => n.includes('impuesto sobre la renta') && n.includes('representacion')],
   ['ISR', (n) => n.includes('impuesto sobre la renta')],
   ['VIATICOS', (n) => n.startsWith('viatico')],
   ['HORAS_EXTRAS', (n) => n.includes('extra')],

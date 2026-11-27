@@ -322,6 +322,8 @@ function planilla03Pagina({ empresa, planilla, usuario }) {
     return `<td class="n"><span class="chip ${Math.abs(d) < 0.005 ? 'verde' : 'rojo'}">${fmt(d)}</span></td>`;
   }).join('')}</tr>`;
   const periodos = idx.map((i) => `${planilla.anio}${String(i + 1).padStart(2, '0')}`);
+  // El ISR del gasto de representación se muestra aparte del ISR del salario.
+  const hayGR = planilla.filas.some((f) => f.totalGR);
   return layout(`Planilla 03 ${planilla.anio}`, `
 <p class="migas"><a href="/">Empresas</a> / <a href="${base}">${h(empresa.razonSocial)}</a></p>
 <section class="cabecera-informe">
@@ -335,7 +337,7 @@ ${tiraMeses(planilla.anio, periodos, (p) => `${base}/informe03/${p}`, { grande: 
 <p class="leyenda-marcas"><span class="marca-entrada">Entrada</span><span class="marca-salida">Sale</span><span class="marca-vacaciones">Vacaciones</span> Pasa el cursor sobre un mes marcado para ver la fecha.</p>
 <div class="scroll alto"><table class="planilla" id="tabla-planilla"><thead>
 <tr><th rowspan="2" class="fija">Nombre</th><th rowspan="2">Identificación</th><th rowspan="2">DV</th>
-${idx.map((i) => `<th colspan="4" class="mes-grupo">${MESES_MAYUS[i]}</th>`).join('')}<th rowspan="2" class="n">Totales</th><th rowspan="2" class="n">ISR anual est.</th><th rowspan="2" class="n">ISR retenido</th><th rowspan="2" class="n">Pend x desc</th></tr>
+${idx.map((i) => `<th colspan="4" class="mes-grupo">${MESES_MAYUS[i]}</th>`).join('')}<th rowspan="2" class="n">Totales</th><th rowspan="2" class="n">ISR salario anual est.</th><th rowspan="2" class="n">ISR salario retenido</th><th rowspan="2" class="n">Pend x desc</th>${hayGR ? '<th rowspan="2" class="n">ISR GR anual est.</th><th rowspan="2" class="n">ISR GR retenido</th><th rowspan="2" class="n">Pend x desc GR</th>' : ''}</tr>
 <tr>${idx.map(() => '<th class="n mes-grupo">Salario</th><th class="n">PP</th><th class="n">PP SS</th><th class="n">XIII</th>').join('')}</tr></thead><tbody>
 ${planilla.filas.map((f) => `<tr><td class="fija">${h(f.nombre)}${f.enMaestro ? '' : ' <span class="chip ambar" title="No está en el maestro de empleados">sin maestro</span>'}</td><td class="mono">${h(f.cedula)}</td><td>${h(f.dv)}</td>
 ${idx.map((i) => {
@@ -344,7 +346,7 @@ ${idx.map((i) => {
     const marca = m ? ` marca-${m.tipo}" title="${h(m.comentario)}` : '';
     return v ? [v.mes, v.pp, v.ppSS, v.xiii].map((x, j) => `<td class="n${x ? '' : ' cero'}${j === 0 ? ` mes-grupo${marca}` : ''}">${fmt(x)}</td>`).join('') : '<td class="mes-grupo"></td><td></td><td></td><td></td>';
   }).join('')}
-<td class="n fuerte">${fmt(f.total)}</td><td class="n">${fmt(f.isrEstimado)}</td><td class="n">${fmt(f.isrRetenido)}</td><td class="n${f.pendiente ? ' alerta' : ' cero'}">${fmt(f.pendiente)}</td></tr>`).join('')}
+<td class="n fuerte">${fmt(f.total)}</td><td class="n">${fmt(f.isrEstimado)}</td><td class="n">${fmt(f.isrRetenido)}</td><td class="n${f.pendiente ? ' alerta' : ' cero'}">${fmt(f.pendiente)}</td>${hayGR ? `<td class="n${f.isrGREstimado ? '' : ' cero'}">${fmt(f.isrGREstimado)}</td><td class="n${f.isrGRRetenido ? '' : ' cero'}">${fmt(f.isrGRRetenido)}</td><td class="n${f.pendienteGR ? ' alerta' : ' cero'}">${fmt(f.pendienteGR)}</td>` : ''}</tr>`).join('')}
 </tbody></table></div>
 <h2>Cuotas a la CSS por mes</h2>
 <p class="nota">Cada cuota se calcula por empleado y se redondea como lo hace la CSS. La última fila compara contra el total del detalle.</p>
@@ -354,7 +356,7 @@ ${filaRes('Salarios', 'salarios')}${filaRes('XIII mes', 'xiii')}
 ${filaRes('SS patronal', 'ssPatronal')}${filaRes('SS XIII mes patronal', 'ssXiiiPatronal')}${filaRes('SE patronal', 'sePatronal')}${filaRes('Riesgo profesional', 'riesgo')}
 ${filaRes('Subtotal patronal', 'subtotalPatronal', 'sub')}
 <tr class="grupo"><td colspan="${idx.length + 1}">Empleado</td></tr>
-${filaRes('SS empleado', 'ssEmpleado')}${filaRes('SS XIII mes empleado', 'ssXiiiEmpleado')}${filaRes('SE empleado', 'seEmpleado')}${filaRes('ISR empleado', 'isr')}
+${filaRes('SS empleado', 'ssEmpleado')}${filaRes('SS XIII mes empleado', 'ssXiiiEmpleado')}${filaRes('SE empleado', 'seEmpleado')}${filaRes('ISR salario', 'isr')}${hayGR ? filaRes('ISR gasto de representación', 'isrGR') : ''}
 ${filaRes('Subtotal empleado', 'subtotalEmpleado', 'sub')}
 ${filaRes('Total calculado', 'total', 'tot')}${filaRes('Total según detalle CSS', 'totalCSS', 'tot')}${filaDif}
 </tbody></table></div>`, { usuario, seccion: 'empresas' });
