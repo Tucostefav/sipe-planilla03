@@ -7,7 +7,7 @@ const ExcelJS = require('exceljs');
 const fmt = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const EMPLEADOS = [
-  { ss: '1000001', cedula: '8-100-200', apellido: 'PEREZ', nombre: 'JUAN', sexo: 'Masculino', doc: 'Pasaporte',
+  { ss: '1000001', cedula: '8-100-200', apellido: 'PEREZ', nombre: 'JUAN', sexo: 'Masculino',
     comp: [['Primas de Producción', 400, 80], ['Décimo tercer mes', 213.33, 0], ['Sueldo', 640, 640], ['Impuesto sobre la renta', 36, 0]] },
   { ss: '', cedula: '4-50-60', apellido: 'GOMEZ', nombre: 'ANA', sexo: 'Femenino',
     comp: [['Vacaciones', 800.29, 800.29], ['Décimo tercer mes', 249.9, 0]],
@@ -19,7 +19,7 @@ const EMPLEADOS = [
     novedad: ['Aviso Entrada', '1 de agosto de 2026', ''] },
 ];
 
-async function crearDetalleEjemplo(destino, mesCuota = 'Agosto 2026') {
+async function crearDetalleEjemplo(destino, mesCuota = 'Agosto 2026', empleados = EMPLEADOS) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Sheet1');
   const set = (r, c, v) => { ws.getRow(r).getCell(c).value = v; };
@@ -33,7 +33,7 @@ async function crearDetalleEjemplo(destino, mesCuota = 'Agosto 2026') {
 
   let salarioTotal = 0;
   let isrTotal = 0;
-  for (const e of EMPLEADOS) {
+  for (const e of empleados) {
     e.salario = e.comp.reduce((s, c) => s + c[2], 0);
     salarioTotal += e.salario;
     isrTotal += e.comp.filter((c) => c[0].startsWith('Impuesto')).reduce((s, c) => s + c[1], 0);
@@ -44,7 +44,7 @@ async function crearDetalleEjemplo(destino, mesCuota = 'Agosto 2026') {
   totales.forEach(([k, v], i) => { set(9 + i, 2, k); set(9 + i, 4, fmt(v)); });
 
   let r = 17;
-  for (const e of EMPLEADOS) {
+  for (const e of empleados) {
     set(r, 2, 'Seguro Social'); set(r, 3, e.doc || 'Cédula'); set(r, 4, 'Apellido'); set(r, 6, 'Nombre'); set(r, 11, 'Sexo'); r++;
     set(r, 2, e.ss); set(r, 3, e.cedula); set(r, 4, e.apellido); set(r, 6, e.nombre); set(r, 11, e.sexo); r++;
     set(r, 2, 'Componentes'); set(r, 4, 'Montos Reportados (B/.)'); set(r, 7, 'Montos que Constituyen Salario'); r++;

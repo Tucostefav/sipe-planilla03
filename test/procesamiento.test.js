@@ -8,7 +8,8 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const { parseDetalleCSS, codigoConcepto } = require('../src/parseDetalleCSS');
 const { isrGastoRepresentacion, separarIsr } = require('../src/isr');
-const { construirInforme03, excelInforme03, COLUMNAS } = require('../src/informe03');
+const { construirInforme03, excelInforme03, COLUMNAS, documentoPasaporte } = require('../src/informe03');
+const { crearDetalleEjemplo } = require('../scripts/crearDetalleEjemplo');
 const { construirPlanilla03, excelPlanilla03, isrAnual, clasificarNovedad } = require('../src/planilla03');
 const { construirTalonarios, excelTalonarios, pdfTalonarios } = require('../src/talonarios');
 const { periodoDesdeTexto, round2 } = require('../src/util');
@@ -24,9 +25,8 @@ test('lee encabezado, totales y empleados del detalle de la CSS', async () => {
   assert.equal(d.empresa.patronal, '87-000-00000');
   assert.equal(d.periodo, '202608');
   assert.equal(d.empleados.length, 4);
-  // El primer empleado viene con "Pasaporte" en el encabezado en vez de "Cédula".
   const juan = d.empleados.find((e) => e.cedula === '8-100-200');
-  assert.equal(juan.tipoDocumento, 'pasaporte');
+  assert.equal(juan.tipoDocumento, 'cedula');
   assert.equal(d.totales.SALARIO, round2(d.empleados.reduce((s, e) => s + e.salario, 0)));
   assert.equal(juan.salario, 720);
   assert.deepEqual(juan.componentes.PRIMA_PRODUCCION, { reportado: 400, constituyeSalario: 80 });
@@ -102,6 +102,32 @@ test('Informe 03: mapeo de columnas, orden por cédula y fórmulas', async () =>
   assert.equal(luis.RENTA_NETA_GRAVABLE, 2970.83, 'los viáticos no van al Informe 03');
   assert.ok(inf.cuadres.every((c) => c.ok));
   assert.ok(inf.avisos.some((a) => a.cedula === '4-50-60' && a.tipo === 'dv'));
+});
+
+test('Informe 03: pasaporte con TIPO 2, "PAS" delante y sin DV; cédula E- con TIPO 1 y DV', async () => {
+  const destino = path.join(os.tmpdir(), `detalle_pasaporte_${process.pid}.xlsx`);
+  await crearDetalleEjemplo(destino, 'Septiembre 2026', [
+    { ss: '', cedula: 'T764929', apellido: 'MERCADO', nombre: 'CARLOS', sexo: 'Masculino', doc: 'Pasaporte', comp: [['Sueldo', 900, 900]] },
+    { ss: '', cedula: 'E-8-52819', apellido: 'PALLARES', nombre: 'JOSE', sexo: 'Masculino', comp: [['Sueldo', 1000, 1000]] },
+  ]);
+  const d = await parseDetalleCSS(destino);
+  fs.unlinkSync(destino);
+  assert.equal(d.empleados[0].tipoDocumento, 'pasaporte');
+  const maestro = { T764929: { nombreCompleto: 'CARLOS MERCADO', dv: '5' }, 'E-8-52819': { nombreCompleto: 'JOSE PALLARES', dv: '10' } };
+  const inf = construirInforme03(d, { idPlanilla: '76001086', buscarEmpleado: (c) => maestro[c] || null });
+  const pas = inf.filas.find((f) => f.NOMBRE_EMPLEADO === 'CARLOS MERCADO');
+  const ext = inf.filas.find((f) => f.NOMBRE_EMPLEADO === 'JOSE PALLARES');
+  assert.deepEqual([pas.ID_PLANILLA, pas.TIPO, pas.NUMERO_DOCUMENTO, pas.DV], [76001086, 2, 'PAST764929', '']);
+  assert.deepEqual([ext.ID_PLANILLA, ext.TIPO, ext.NUMERO_DOCUMENTO, ext.DV], [76001086, 1, 'E-8-52819', 10]);
+  assert.ok(!inf.avisos.some((a) => a.tipo === 'dv'), 'al pasaporte no se le pide DV');
+  assert.equal(documentoPasaporte('pas t764929'), 'PAST764929');
+
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await excelInforme03({ ruc: d.empresa.ruc, periodo: d.periodo, filas: inf.filas }));
+  const ws = wb.worksheets[0];
+  const fila = [5, 6].find((r) => ws.getCell(`D${r}`).value === 'PAST764929');
+  assert.equal(ws.getCell(`C${fila}`).value, 2);
+  assert.equal(ws.getCell(`E${fila}`).value, null);
 });
 
 test('Informe 03: Excel con formato DGI', async () => {

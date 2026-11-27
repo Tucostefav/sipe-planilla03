@@ -164,7 +164,11 @@ class Servicio {
       for (const alias of e.otrasIds || []) idx.set(String(alias).toUpperCase(), e);
     }
     for (const e of es) idx.set(String(e.cedula).toUpperCase(), e);
-    return (cedula) => idx.get(String(cedula).toUpperCase()) || null;
+    // Un pasaporte puede estar guardado con o sin el "PAS" del Informe 03.
+    return (cedula) => {
+      const c = String(cedula).toUpperCase();
+      return idx.get(c) || idx.get(c.startsWith('PAS') ? c.slice(3) : `PAS${c}`) || null;
+    };
   }
 
   async guardarEmpleado(cedula, { nombreCompleto, dv, otrasIds }) {
