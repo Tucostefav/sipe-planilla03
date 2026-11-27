@@ -6,7 +6,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const ExcelJS = require('exceljs');
-const { parseDetalleCSS } = require('../src/parseDetalleCSS');
+const { parseDetalleCSS, codigoConcepto } = require('../src/parseDetalleCSS');
+const { isrGastoRepresentacion, separarIsr } = require('../src/isr');
 const { construirInforme03, excelInforme03, COLUMNAS } = require('../src/informe03');
 const { construirPlanilla03, excelPlanilla03, isrAnual, clasificarNovedad } = require('../src/planilla03');
 const { construirTalonarios, excelTalonarios, pdfTalonarios } = require('../src/talonarios');
@@ -133,7 +134,7 @@ test('Planilla 03: columnas del mes, PP SS y acumulado anual', async () => {
   assert.equal(p.filas.length, 4);
   assert.deepEqual(p.mesesCargados.map((m, i) => (m ? i : null)).filter((x) => x !== null), [6, 7]);
   const juan = p.filas.find((f) => f.cedula === '8-100-200');
-  assert.deepEqual(juan.meses[7], { mes: 640, pp: 400, ppSS: 80, xiii: 213.33, isr: 36, gr: 0 });
+  assert.deepEqual(juan.meses[7], { mes: 640, pp: 400, ppSS: 80, xiii: 213.33, isr: 36, isrGR: 0, gr: 0 });
   assert.equal(juan.total, 2506.66);
   assert.equal(juan.isrRetenido, 72);
   const rosa = p.filas.find((f) => f.cedula === '2-700-800');
@@ -211,7 +212,55 @@ test('Planilla 03: el gasto de representación va en su propia fila con ISR del 
   // SS y riesgo sobre salario + GR; seguro educativo solo sobre el salario.
   assert.equal(ws.getCell('U9').formula, '(U7+V7)*$A$9');
   assert.equal(ws.getCell('U11').formula, 'U7*$A$11');
-  assert.equal(ws.getCell('U20').formula, 'U13+U19');
+  // El ISR del salario y el del GR van en filas separadas al pie, no sumados en una sola.
+  assert.equal(ws.getCell('C18').value, 'Imp sobre la renta Emp');
+  assert.equal(ws.getCell('C19').value, 'Imp sobre la renta GR');
+  assert.equal(ws.getCell('U18').formula, 'SUMIF($C$5:$C$6,"<>* GR",AN5:AN6)');
+  assert.equal(ws.getCell('U18').result, 15.58);
+  assert.equal(ws.getCell('U19').formula, 'SUMIF($C$5:$C$6,"* GR",AN5:AN6)');
+  assert.equal(ws.getCell('U19').result, 25);
+  assert.equal(ws.getCell('U20').formula, 'SUM(U15:U19)');
+  assert.equal(ws.getCell('U21').formula, 'U13+U20');
+  // En pantalla también quedan separados.
+  const ana = p.filas[0];
+  assert.equal(ana.meses[8].isr, 15.58);
+  assert.equal(ana.meses[8].isrGR, 25);
+  assert.equal(ana.isrRetenido, 15.58);
+  assert.equal(ana.isrGRRetenido, 25);
+  assert.equal(ana.isrEstimado, isrAnual(950), 'el ISR del salario no incluye el GR');
+  assert.equal(p.resumen[8].isr, 15.58);
+  assert.equal(p.resumen[8].isrGR, 25);
+});
+
+test('Informe 03: ISR del salario e ISR del gasto de representación en columnas separadas', () => {
+  const detalle = {
+    periodo: '202609', empresa: { ruc: '1-1-1' }, totales: { SALARIO: 1200, ISR: 40.58 },
+    empleados: [{ cedula: '8-1-1', nombre: 'Ana', apellido: 'Paz', salario: 1200, novedades: [], cuotas: {},
+      componentes: { SUELDO: { reportado: 950, constituyeSalario: 950 }, GASTO_REPRESENTACION: { reportado: 250, constituyeSalario: 250 }, ISR: { reportado: 40.58 } } }],
+  };
+  const { filas, cuadres } = construirInforme03(detalle, { idPlanilla: 1, buscarEmpleado: () => null });
+  const f = filas[0];
+  assert.equal(f.GASTO_REPRESENTACION, 250);
+  assert.equal(f.IMPUESTO_RENTA, 15.58, 'solo el ISR del salario');
+  assert.equal(f.IMP_RENTA_REPRESENTACION, 25, 'ISR del GR con su tabla (10%)');
+  assert.equal(f.RETENCIONES_SALARIO, 15.58);
+  assert.equal(f.RETENCIONES_GR, 25);
+  assert.ok(cuadres.every((c) => c.ok), 'salario + GR cuadra con el ISR total de la CSS');
+
+  // Si la CSS trae el ISR del GR en su propia línea, se usa tal cual.
+  detalle.empleados[0].componentes.ISR = { reportado: 20 };
+  detalle.empleados[0].componentes.ISR_GR = { reportado: 20.58 };
+  const g = construirInforme03(detalle, { idPlanilla: 1, buscarEmpleado: () => null }).filas[0];
+  assert.equal(g.IMPUESTO_RENTA, 20);
+  assert.equal(g.IMP_RENTA_REPRESENTACION, 20.58);
+});
+
+test('ISR del gasto de representación: tabla propia y concepto separado en el detalle', () => {
+  assert.equal(isrGastoRepresentacion(25000), 2500);
+  assert.equal(isrGastoRepresentacion(30000), 3250);
+  assert.equal(separarIsr({ GASTO_REPRESENTACION: { reportado: 3000 }, ISR: { reportado: 500 } }).gr, 345.83);
+  assert.equal(codigoConcepto('Impuesto sobre la renta gasto de representación'), 'ISR_GR');
+  assert.equal(codigoConcepto('Impuesto sobre la renta'), 'ISR');
 });
 
 test('Planilla 03: colores y comentarios de entrada, salida y vacaciones', async () => {

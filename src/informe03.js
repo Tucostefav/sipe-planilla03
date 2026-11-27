@@ -2,6 +2,7 @@
 
 const ExcelJS = require('exceljs');
 const { round2, compararCedula } = require('./util');
+const { separarIsr } = require('./isr');
 
 // Columnas del Informe 03 v5 de la DGI, en orden (A..AG).
 const COLUMNAS = [
@@ -27,7 +28,6 @@ const DESDE_COMPONENTE = {
   DTM: 'DTM',
   GRATIFICACION_AGUINALDOS: 'GRATIFICACION_AGUINALDOS',
   GASTO_REPRESENTACION: 'GASTO_REPRESENTACION',
-  IMPUESTO_RENTA: 'ISR',
 };
 
 const ANCHOS = [11, 8, 4.57, 19.57, 3.29, 32.86, 7.71, 7.14, 13, 11.14, 10.86, 14.14, 14.43, 5.43, 17.71, 7,
@@ -56,6 +56,11 @@ function construirInforme03(detalle, { idPlanilla, buscarEmpleado }) {
       for (const [col, cod] of Object.entries(DESDE_COMPONENTE)) {
         f[col] = round2((e.componentes[cod] || {}).reportado || 0);
       }
+      // El ISR del salario y el del gasto de representación van en columnas separadas
+      // (Z y AA), cada uno con su propia tabla; no se suman.
+      const isr = separarIsr(e.componentes);
+      f.IMPUESTO_RENTA = isr.salario;
+      f.IMP_RENTA_REPRESENTACION = isr.gr;
       // El ISR del mes ya fue retenido en planilla: las retenciones copian el impuesto,
       // así A_FAVOR_DEL_FISCO y A_FAVOR_DEL_EMPLEADO quedan en 0.
       f.RETENCIONES_SALARIO = f.IMPUESTO_RENTA;
@@ -70,7 +75,8 @@ function construirInforme03(detalle, { idPlanilla, buscarEmpleado }) {
   const suma = (c) => round2(filas.reduce((s, f) => s + (Number(f[c]) || 0), 0));
   const cuadres = [
     { concepto: 'Salario', informe: suma('SALARIO'), css: detalle.totales.SALARIO },
-    { concepto: 'Impuesto sobre la renta', informe: suma('IMPUESTO_RENTA'), css: detalle.totales.ISR },
+    // La CSS da un solo total de ISR: se compara con el ISR del salario más el del GR.
+    { concepto: 'Impuesto sobre la renta (salario + GR)', informe: round2(suma('IMPUESTO_RENTA') + suma('IMP_RENTA_REPRESENTACION')), css: detalle.totales.ISR },
   ].map((c) => ({ ...c, ok: c.css === undefined || Math.abs(c.informe - c.css) < 0.005 }));
 
   return { filas, avisos, cuadres, totales: Object.fromEntries(COLUMNAS.slice(6).map((c) => [c, suma(c)])) };

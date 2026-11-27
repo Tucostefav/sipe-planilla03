@@ -2,6 +2,7 @@
 
 const ExcelJS = require('exceljs');
 const { round2, compararCedula, MESES, rucDGI, norm } = require('./util');
+const { isrAnual, isrGastoRepresentacion, separarIsr } = require('./isr');
 
 const MESES_MAYUS = MESES.map((m) => m.toUpperCase());
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -18,13 +19,6 @@ function tasas(periodo) {
   };
 }
 
-// ISR anual de asalariados (Panamá): 0% hasta 11,000; 15% hasta 50,000; 25% después (+5,850).
-function isrAnual(renta) {
-  if (renta <= 11000) return 0;
-  if (renta <= 50000) return round2((renta - 11000) * 0.15);
-  return round2(5850 + (renta - 50000) * 0.25);
-}
-
 /**
  * Valores de un empleado en un mes de la Planilla 03.
  * MES = lo que constituye salario sin la parte de la prima (sueldo, vacaciones, extras...).
@@ -34,12 +28,15 @@ function valoresMes(e) {
   const prima = e.componentes.PRIMA_PRODUCCION || { reportado: 0, constituyeSalario: 0 };
   const mes = round2(e.salario - prima.constituyeSalario);
   const pp = round2(prima.reportado);
+  const isrMes = separarIsr(e.componentes);
   return {
     mes,
     pp,
     ppSS: round2(Math.max(0, pp - mes / 2)),
     xiii: round2((e.componentes.DTM || {}).reportado || 0),
-    isr: round2((e.componentes.ISR || {}).reportado || 0),
+    // ISR del salario y del gasto de representación, separados.
+    isr: isrMes.salario,
+    isrGR: isrMes.gr,
     // El gasto de representación paga seguro social pero no seguro educativo.
     gr: round2((e.componentes.GASTO_REPRESENTACION || {}).constituyeSalario || 0),
   };
@@ -119,9 +116,15 @@ function construirPlanilla03({ anio, detalles, buscarEmpleado }) {
     f.marcas = marcasEmpleado(f, f.novedades, mesesCargados);
     delete f.novedades;
     f.total = round2(f.meses.reduce((s, v) => s + (v ? v.mes + v.pp + v.xiii : 0), 0));
-    f.isrEstimado = isrAnual(f.total);
+    // El ISR del salario y el del gasto de representación se calculan cada uno con su
+    // tabla y por separado: el GR no se suma al salario.
+    f.totalGR = round2(f.meses.reduce((s, v) => s + (v ? v.gr : 0), 0));
+    f.isrEstimado = isrAnual(round2(f.total - f.totalGR));
     f.isrRetenido = round2(f.meses.reduce((s, v) => s + (v ? v.isr : 0), 0));
     f.pendiente = round2(Math.max(0, f.isrEstimado - f.isrRetenido));
+    f.isrGREstimado = isrGastoRepresentacion(f.totalGR);
+    f.isrGRRetenido = round2(f.meses.reduce((s, v) => s + (v ? v.isrGR : 0), 0));
+    f.pendienteGR = round2(Math.max(0, f.isrGREstimado - f.isrGRRetenido));
   }
 
   const resumen = meses.map((info, i) => {
@@ -134,6 +137,7 @@ function construirPlanilla03({ anio, detalles, buscarEmpleado }) {
     const ppSS = sum('ppSS');
     const xiii = sum('xiii');
     const isr = sum('isr');
+    const isrGR = sum('isrGR');
     // La CSS calcula y redondea cada cuota por empleado y luego suma; se hace igual
     // para que el total cuadre al centavo con el detalle.
     const cuota = (fn) => round2(filas.reduce((s, f) => {
@@ -141,7 +145,7 @@ function construirPlanilla03({ anio, detalles, buscarEmpleado }) {
       return v ? s + round2(fn(v.mes + v.ppSS, v)) : s;
     }, 0));
     const r = {
-      periodo: info.periodo, salarios, pp, ppSS, xiii, isr,
+      periodo: info.periodo, salarios, pp, ppSS, xiii, isr, isrGR,
       ssPatronal: cuota((b) => b * t.ssPatronal),
       ssXiiiPatronal: cuota((b, v) => v.xiii * t.ssXiiiPatronal),
       // Seguro educativo: la CSS redondea la tasa combinada (2.75%) por empleado;
@@ -154,7 +158,7 @@ function construirPlanilla03({ anio, detalles, buscarEmpleado }) {
       tasas: { ...t, riesgo },
     };
     r.subtotalPatronal = round2(r.ssPatronal + r.ssXiiiPatronal + r.sePatronal + r.riesgo);
-    r.subtotalEmpleado = round2(r.ssEmpleado + r.ssXiiiEmpleado + r.seEmpleado + isr);
+    r.subtotalEmpleado = round2(r.ssEmpleado + r.ssXiiiEmpleado + r.seEmpleado + isr + isrGR);
     r.total = round2(r.subtotalPatronal + r.subtotalEmpleado);
     const c = info.totalesCSS || {};
     r.totalCSS = round2((c.SS || 0) + (c.SS_DTM || 0) + (c.SE || 0) + (c.RIESGO || 0) + (c.ISR || 0));
@@ -174,12 +178,6 @@ const colLetra = (n) => {
 // Encabezados de los meses tal como están en el modelo de la Planilla 03.
 const MESES_PLANILLA = ['Enero', 'Feb', 'Mar', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agost', 'Sept', 'Oct', 'Nov', 'Dic'];
 const MESES_ISR = MESES_CORTOS.map((m) => m.toUpperCase());
-
-// ISR anual del gasto de representación: 10% hasta 25,000 y 15% sobre el excedente (+2,500).
-function isrGastoRepresentacion(renta) {
-  if (renta <= 25000) return round2(renta * 0.1);
-  return round2(2500 + (renta - 25000) * 0.15);
-}
 
 /**
  * Exporta la Planilla 03 anual con la estructura del modelo de la empresa:
@@ -252,13 +250,13 @@ async function excelPlanilla03({ empresa, planilla }) {
   for (let i = 0; i < 12; i++) ws.getColumn(cIsrMes(i)).width = 7.1;
   ws.getColumn(cDesc).width = 9.6; ws.getColumn(cSaldo).width = 9.4;
 
-  // Filas de empleados. El ISR del mes se reparte: al GR le toca su 10% (sin pasar de lo
-  // retenido) y el resto al salario.
+  // Filas de empleados. El ISR del salario va en la fila del empleado y el del gasto de
+  // representación en su fila "GR", cada uno por separado.
   const lineas = [];
   for (const f of filas) {
     const tieneGR = f.meses.some((v) => v && v.gr);
-    const isrGR = f.meses.map((v) => (v && v.gr ? Math.min(v.isr, round2(v.gr * 0.1)) : 0));
-    const sal = { f, gr: false, valores: new Map(), isr: f.meses.map((v, i) => (v ? round2(v.isr - isrGR[i]) : 0)) };
+    const isrGR = f.meses.map((v) => (v ? v.isrGR : 0));
+    const sal = { f, gr: false, valores: new Map(), isr: f.meses.map((v) => (v ? v.isr : 0)) };
     f.meses.forEach((v, i) => {
       if (!v) return;
       sal.valores.set(cols[i].mes, round2(v.mes - v.gr));
@@ -324,13 +322,16 @@ async function excelPlanilla03({ empresa, planilla }) {
   }
 
   // Cuotas a la CSS por mes, con las tasas en la columna A como en el modelo.
-  const R = { xiii: rTot + 1, ssP: rTot + 2, ssXP: rTot + 3, seP: rTot + 4, riesgo: rTot + 5, subP: rTot + 6, ssE: rTot + 8, seE: rTot + 9, ssXE: rTot + 10, isr: rTot + 11, subE: rTot + 12, total: rTot + 13 };
+  // Si hay gasto de representación, su ISR va en una fila propia, separado del ISR del salario.
+  const g = hayGR ? 1 : 0;
+  const R = { xiii: rTot + 1, ssP: rTot + 2, ssXP: rTot + 3, seP: rTot + 4, riesgo: rTot + 5, subP: rTot + 6, ssE: rTot + 8, seE: rTot + 9, ssXE: rTot + 10, isr: rTot + 11, isrGR: hayGR ? rTot + 12 : null, subE: rTot + 12 + g, total: rTot + 13 + g };
   const iUlt = resumen.map((x, i) => (x ? i : -1)).reduce((a, b) => Math.max(a, b), -1);
   const tasaBase = iUlt >= 0 ? resumen[iUlt].tasas : { ...tasas(`${planilla.anio}12`), riesgo: 0 };
   const filaTasa = { ssPatronal: R.ssP, ssXiiiPatronal: R.ssXP, sePatronal: R.seP, riesgo: R.riesgo, ssEmpleado: R.ssE, seEmpleado: R.seE, ssXiiiEmpleado: R.ssXE };
   for (const [k, r] of Object.entries(filaTasa)) { ws.getCell(r, 1).value = tasaBase[k]; ws.getCell(r, 1).numFmt = '0.00%'; }
   const titulos = [[R.xiii, 'XIII MES'], [R.ssP, 'SS Patronal'], [R.ssXP, 'SS XIII mes Patronal'], [R.seP, 'SE Patronal'], [R.riesgo, 'Riesgo Profesional'], [R.subP, 'Sub-Total x mes', true],
-    [R.ssE, 'SS Empleado'], [R.seE, 'SE Empleado'], [R.ssXE, 'SS XIII mes Empleado'], [R.isr, 'Imp sobre la renta Emp'], [R.subE, 'Sub total x mes', true], [R.total, 'Total según CSS']];
+    [R.ssE, 'SS Empleado'], [R.seE, 'SE Empleado'], [R.ssXE, 'SS XIII mes Empleado'], [R.isr, 'Imp sobre la renta Emp'],
+    ...(hayGR ? [[R.isrGR, 'Imp sobre la renta GR']] : []), [R.subE, 'Sub total x mes', true], [R.total, 'Total según CSS']];
   for (const [r, t, negrita] of titulos) { ws.getCell(r, 3).value = t; if (negrita) ws.getCell(r, 3).font = { ...f11, bold: true }; }
   const azul = { font: { ...f11, color: { argb: 'FFFFFFFF' } }, fill: relleno({ indexed: 17 }) };
   ws.getCell(R.total, 3).style = azul;
@@ -368,8 +369,20 @@ async function excelPlanilla03({ empresa, planilla }) {
     const ssE = put(R.ssE, `${baseSS}*${tasa('ssEmpleado').ref}`, vBaseSS * tasa('ssEmpleado').v);
     const seE = put(R.seE, `${M}${rTot}*${tasa('seEmpleado').ref}`, mesTot * tasa('seEmpleado').v);
     const ssXE = put(R.ssXE, `${M}${R.xiii}*${tasa('ssXiiiEmpleado').ref}`, xiiiTot * tasa('ssXiiiEmpleado').v);
-    const isr = put(R.isr, `${L(cIsrMes(i))}${rTot}`, totales.get(cIsrMes(i)) || 0);
-    const subE = put(R.subE, `SUM(${M}${R.ssE}:${M}${R.isr})`, ssE + seE + ssXE + isr);
+    const I = L(cIsrMes(i));
+    const isrMesTot = totales.get(cIsrMes(i)) || 0;
+    let isr;
+    let isrGR = 0;
+    if (hayGR) {
+      // Las filas "NOMBRE GR" llevan el ISR del gasto de representación; las demás, el del salario.
+      const nombres = `$C$${r0}:$C$${rUlt}`;
+      const vGR = round2(lineas.reduce((s, ln) => s + (ln.gr ? ln.isr[i] || 0 : 0), 0));
+      isr = put(R.isr, `SUMIF(${nombres},"<>* GR",${I}${r0}:${I}${rUlt})`, isrMesTot - vGR);
+      isrGR = put(R.isrGR, `SUMIF(${nombres},"* GR",${I}${r0}:${I}${rUlt})`, vGR);
+    } else {
+      isr = put(R.isr, `${I}${rTot}`, isrMesTot);
+    }
+    const subE = put(R.subE, `SUM(${M}${R.ssE}:${M}${R.subE - 1})`, ssE + seE + ssXE + isr + isrGR);
     put(R.total, `${M}${R.subP}+${M}${R.subE}`, subP + subE);
     for (const r of [R.subP, R.subE]) ws.getCell(r, m.mes).font = { ...f11, bold: true };
     ws.getCell(R.total, m.mes).style = { ...azul, numFmt: num };
