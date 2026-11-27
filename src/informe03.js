@@ -33,6 +33,12 @@ const DESDE_COMPONENTE = {
 const ANCHOS = [11, 8, 4.57, 19.57, 3.29, 32.86, 7.71, 7.14, 13, 11.14, 10.86, 14.14, 14.43, 5.43, 17.71, 7,
   24.57, 21, 19.86, 21.29, 19.71, 14.14, 27.14, 20.86, 20.43, 15, 24.86, 19.29, 14.57, 15, 18.29, 17.57, 22];
 
+// Número de pasaporte como lo pide la DGI: "PAS" + el número, sin espacios (T764929 -> PAST764929).
+function documentoPasaporte(numero) {
+  const n = String(numero || '').toUpperCase().replace(/\s+/g, '');
+  return n.startsWith('PAS') ? n : `PAS${n}`;
+}
+
 /**
  * Arma las filas del Informe 03 a partir de un mes del detalle de la CSS.
  * @param {object} detalle resultado de parseDetalleCSS
@@ -48,9 +54,13 @@ function construirInforme03(detalle, { idPlanilla, buscarEmpleado }) {
       const f = Object.fromEntries(COLUMNAS.map((c) => [c, 0]));
       f.ID_PLANILLA = idPlanilla ? Number(idPlanilla) || idPlanilla : '';
       f.PERIODO = Number(detalle.periodo);
-      f.TIPO = 1;
-      f.NUMERO_DOCUMENTO = e.cedula;
-      f.DV = m && m.dv !== undefined && m.dv !== null && m.dv !== '' ? Number(m.dv) : 0;
+      // Pasaporte (extranjeros sin cédula): TIPO 2, el número con "PAS" delante y sin DV.
+      // Cédula (incluida la E- de extranjero residente): TIPO 1 con su DV.
+      const pasaporte = e.tipoDocumento === 'pasaporte';
+      const tieneDV = m && m.dv !== undefined && m.dv !== null && m.dv !== '';
+      f.TIPO = pasaporte ? 2 : 1;
+      f.NUMERO_DOCUMENTO = pasaporte ? documentoPasaporte(e.cedula) : e.cedula;
+      f.DV = pasaporte ? '' : tieneDV ? Number(m.dv) : 0;
       f.NOMBRE_EMPLEADO = (m && m.nombreCompleto) || `${e.nombre} ${e.apellido}`.trim();
       f.SALARIO = round2(e.salario);
       for (const [col, cod] of Object.entries(DESDE_COMPONENTE)) {
@@ -67,7 +77,7 @@ function construirInforme03(detalle, { idPlanilla, buscarEmpleado }) {
       f.RETENCIONES_GR = f.IMP_RENTA_REPRESENTACION;
       calcularFormulas(f);
       if (!m || !m.nombreCompleto) avisos.push({ cedula: e.cedula, tipo: 'nombre', texto: `${e.cedula}: no está en el maestro de empleados; se usó el nombre de la CSS (${f.NOMBRE_EMPLEADO}).` });
-      if (!m || m.dv === undefined || m.dv === null || m.dv === '') avisos.push({ cedula: e.cedula, tipo: 'dv', texto: `${e.cedula}: no tiene DV en el maestro; se puso 0.` });
+      if (!pasaporte && !tieneDV) avisos.push({ cedula: e.cedula, tipo: 'dv', texto: `${e.cedula}: no tiene DV en el maestro; se puso 0.` });
       return f;
     });
   if (!idPlanilla) avisos.unshift({ tipo: 'empresa', texto: 'La empresa no tiene ID_PLANILLA configurado; la columna A queda vacía.' });
@@ -136,6 +146,7 @@ async function excelInforme03({ ruc, periodo, filas }) {
       else if (c === 'A_FAVOR_DEL_FISCO') v = { formula: `IF(Z${r}-AB${r}>=0,Z${r}-AB${r},0)`, result: f[c] };
       else if (c === 'A_FAVOR_DEL_EMPLEADO') v = { formula: `IF(Z${r}-AB${r}<0,AB${r}-Z${r},0)`, result: f[c] };
       else if (c === 'NUMERO_DOCUMENTO' || c === 'NOMBRE_EMPLEADO') v = String(v);
+      else if (c === 'DV' && v === '') v = null; // pasaporte: DV en blanco
       cell.value = v;
       cell.style = estilo;
     });
@@ -145,4 +156,4 @@ async function excelInforme03({ ruc, periodo, filas }) {
   return wb.xlsx.writeBuffer();
 }
 
-module.exports = { COLUMNAS, construirInforme03, excelInforme03, nombreArchivoInforme03 };
+module.exports = { COLUMNAS, documentoPasaporte, construirInforme03, excelInforme03, nombreArchivoInforme03 };
